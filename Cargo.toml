@@ -3,11 +3,17 @@ name = "krynon"
 version = "0.1.0"
 authors = ["Vivelis <¨maceo.jalbert@gmail.com¨>"]
 edition = "2021"
+repository = "https://github.com/Holobion/Krynon"
+homepage = "https://github.com/Holobion/Krynon"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 dioxus = { version = "0.7.1", features = ["router", "fullstack"] }
+serde = { version = "1.0.228", features = ["derive"] }
+sqlx = { version = "0.8.0", features = ["runtime-tokio-native-tls", "postgres", "macros", "json"], optional = true }
+dotenvy = { version = "0.15.7", optional = true }
+tokio = { version = "1.37", features = ["sync"], optional = true }
 
 [features]
 default = ["web"]
@@ -18,4 +24,4 @@ desktop = ["dioxus/desktop"]
 # The feature that are only required for the mobile = ["dioxus/mobile"] build target should be optional and only enabled in the mobile = ["dioxus/mobile"] feature
 mobile = ["dioxus/mobile"]
 # The feature that are only required for the server = ["dioxus/server"] build target should be optional and only enabled in the server = ["dioxus/server"] feature
-server = ["dioxus/server"]
+server = ["dioxus/server", "dep:sqlx", "dep:dotenvy", "dep:tokio"]

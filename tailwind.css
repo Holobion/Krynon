@@ -1,1 +1,81 @@
 @import "tailwindcss";
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;700;900&family=JetBrains+Mono:wght@400;700&display=swap');
+
+@theme {
+  --hb-bg-membrane: #F8FAFC;
+  --hb-bg-cytoplasm: #FFFFFF;
+  --hb-text-nucleus: #0F172A;
+  --hb-text-matrix: #64748B;
+  --hb-color-primary: #10B981;
+  --hb-glow-primary: rgba(16, 185, 129, 0.25);
+
+  /* Mapping to Tailwind Color Classes */
+  --color-hb-membrane: var(--hb-bg-membrane);
+  --color-hb-cytoplasm: var(--hb-bg-cytoplasm);
+  --color-hb-nucleus: var(--hb-text-nucleus);
+  --color-hb-matrix: var(--hb-text-matrix);
+  --color-hb-primary: var(--hb-color-primary);
+  --color-hb-glow: var(--hb-glow-primary);
+
+  /* Fonts */
+  --font-display: "Outfit", sans-serif;
+  --font-sans: "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+/* Base styling overrides */
+body {
+  font-family: var(--font-sans);
+  background-color: var(--hb-bg-membrane);
+  color: var(--hb-text-nucleus);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+}
+
+/* Custom utility component classes for Symbiosis Design System */
+.hb-squarcle {
+  border-radius: 24px;
+}
+
+.hb-squarcle-sm {
+  border-radius: 16px;
+}
+
+.hb-btn-pill {
+  border-radius: 9999px;
+  background-color: var(--hb-color-primary);
+  color: #ffffff;
+  font-weight: 600;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hb-btn-pill:hover {
+  box-shadow: 0 10px 25px -5px var(--hb-glow-primary);
+  transform: translateY(-1px);
+  filter: brightness(1.05);
+}
+
+.hb-btn-pill:active {
+  transform: translateY(0px);
+  filter: brightness(0.95);
+}
+
+.hb-glass {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.hb-halo {
+  box-shadow: 0 10px 25px -5px var(--hb-glow-primary);
+}
+
+.hb-border-light {
+  border: 1px solid rgba(100, 116, 139, 0.12);
+}

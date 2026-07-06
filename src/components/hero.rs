@@ -1,5 +1,5 @@
-use dioxus::prelude::*;
 use crate::Route;
+use dioxus::prelude::*;
 
 #[component]
 pub fn Hero() -> Element {
@@ -8,16 +8,16 @@ pub fn Hero() -> Element {
             class: "relative overflow-hidden pt-12 pb-16 md:py-24",
             div {
                 class: "max-w-6xl mx-auto px-6 grid grid-cols-1 md:grid-cols-12 gap-12 items-center",
-                
+
                 // Left Column: Hero Text
                 div {
                     class: "md:col-span-7 flex flex-col items-start text-left space-y-6",
-                    
+
                     div {
                         class: "inline-flex items-center gap-2 px-3 py-1 rounded-full bg-hb-primary/10 border border-hb-primary/20 text-hb-primary text-xs font-semibold uppercase tracking-wider",
                         span { "🎯 Objective & Data-Driven" }
                     }
-                    
+
                     h1 {
                         class: "font-black tracking-tight text-5xl md:text-6xl text-hb-nucleus leading-[1.1] font-display",
                         "Unveil the perfect choice with "
@@ -26,12 +26,12 @@ pub fn Hero() -> Element {
                             "Krynon"
                         }
                     }
-                    
+
                     p {
                         class: "text-hb-matrix text-lg leading-relaxed max-w-xl",
                         "Say goodbye to arbitrary 5-star reviews. Krynon is an analytical classification engine that sorts products based on details that actually matter to you. Customize criteria weights to find what fits your life."
                     }
-                    
+
                     div {
                         class: "flex flex-col sm:flex-row gap-4 w-full sm:w-auto pt-2",
                         Link {
@@ -46,18 +46,18 @@ pub fn Hero() -> Element {
                         }
                     }
                 }
-                
+
                 // Right Column: Hero Graphic (Interactive/Animated Mockup)
                 div {
                     class: "md:col-span-5 flex justify-center relative w-full py-8 md:py-0",
                     // Glowing background blobs
                     div { class: "absolute w-72 h-72 bg-hb-primary/15 rounded-full blur-3xl -z-10" }
                     div { class: "absolute w-48 h-48 -bottom-8 -left-8 bg-teal-400/10 rounded-full blur-3xl -z-10" }
-                    
+
                     // Main Container for overlapping cards
                     div {
                         class: "relative w-full max-w-sm aspect-[4/3] flex items-center justify-center",
-                        
+
                         // Back Card: Criteria Weights Editor
                         div {
                             class: "absolute top-0 left-4 w-[90%] bg-slate-900 text-white rounded-2xl p-5 shadow-lg border border-slate-800 -rotate-3 translate-y-[-10px] opacity-90 transition-all duration-300 hover:rotate-0 hover:translate-y-[-15px] hover:z-20",
@@ -104,7 +104,7 @@ pub fn Hero() -> Element {
                         // Front Card: Classification Results
                         div {
                             class: "absolute bottom-0 right-4 w-[90%] bg-white/95 backdrop-blur-md rounded-2xl border border-slate-200/60 p-5 shadow-xl rotate-3 translate-y-[10px] transition-all duration-300 hover:rotate-0 hover:translate-y-[5px] hover:z-20",
-                            
+
                             div {
                                 class: "flex items-center justify-between mb-4 border-b border-slate-100 pb-2",
                                 div {
@@ -114,7 +114,7 @@ pub fn Hero() -> Element {
                                 }
                                 span { class: "text-[10px] text-slate-500", "Matcha Engine" }
                             }
-                            
+
                             div {
                                 class: "space-y-3",
                                 // Winner

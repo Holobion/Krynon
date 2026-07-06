@@ -1,16 +1,16 @@
 // The dioxus prelude contains a ton of common items used in dioxus apps.
 use dioxus::prelude::*;
 
-use views::{Home, Compare, About, Navbar};
+use views::{About, Compare, Home, Navbar};
 
-/// Define a model module that contains the core analytical logic and mock seed data.
-mod model;
 /// Define a components module that contains all shared components for our app.
 mod components;
-/// Define a views module that contains the UI for all Layouts and Routes for our app.
-mod views;
 /// Database module for server-side persistence.
 mod db;
+/// Define a model module that contains the core analytical logic and mock seed data.
+mod model;
+/// Define a views module that contains the UI for all Layouts and Routes for our app.
+mod views;
 
 /// The Route enum is used to define the structure of internal routes in our app.
 #[derive(Debug, Clone, Routable, PartialEq)]

@@ -1,5 +1,8 @@
+use dioxus::prelude::*;
+use serde::{Deserialize, Serialize};
+#[cfg(feature = "server")]
+use sqlx::{types::Json, PgPool, Row};
 use std::collections::HashMap;
-use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Criterion {
@@ -15,7 +18,7 @@ pub struct Category {
     pub name: String,
     pub description: String,
     pub emoji: String,
-    pub criteria: Vec<Criterion>,
+    pub criteria: Vec<Criterion>, // This will be populated by joining with criteria table
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -24,9 +27,9 @@ pub struct ProductType {
     pub name: String,
     pub description: String,
     pub emoji: String,
-    pub category_ids: Vec<String>,
-    pub specific_criteria: Vec<Criterion>,
-    pub presets: Vec<WeightProfile>,
+    pub category_ids: Vec<String>, // This will be populated by joining with product_type_categories
+    pub specific_criteria: Vec<Criterion>, // This will be populated by joining with product_type_specific_criteria
+    pub presets: Vec<WeightProfile>,       // This will need separate handling
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -35,7 +38,7 @@ pub struct Product {
     pub name: String,
     pub description: String,
     pub product_type_id: String,
-    pub scores: HashMap<String, f64>,
+    pub scores: HashMap<String, f64>, // This will be populated by fetching from product_scores
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -44,522 +47,266 @@ pub struct WeightProfile {
     pub weights: HashMap<String, f64>,
 }
 
-/// Calculate the weighted score for a product based on a map of criteria weights.
-/// If a product does not have a score for a criterion, it defaults to 5.0.
-/// Weights are assumed to be between 0.0 and 10.0.
-pub fn calculate_score(product: &Product, weights: &HashMap<String, f64>) -> f64 {
-    let mut total_weight = 0.0;
-    let mut weighted_sum = 0.0;
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AppData {
+    pub categories: Vec<Category>,
+    pub product_types: Vec<ProductType>,
+    pub products: Vec<Product>,
+}
 
-    for (crit_id, score) in &product.scores {
-        if let Some(&weight) = weights.get(crit_id) {
-            weighted_sum += score * weight;
-            total_weight += weight;
-        }
+// Helper to fetch criteria for a given category
+#[cfg(feature = "server")]
+pub async fn fetch_criteria_for_category(
+    pool: &PgPool,
+    category_id: &str,
+) -> Result<Vec<Criterion>, sqlx::Error> {
+    let criteria = sqlx::query_as!(
+        Criterion,
+        r#"
+        SELECT c.id, c.name, c.description, c.emoji
+        FROM criteria c
+        JOIN category_criteria cc ON c.id = cc.criterion_id
+        WHERE cc.category_id = $1
+        ORDER BY c.name
+        "#,
+        category_id
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(criteria)
+}
+
+// Helper to fetch criteria for a given product type
+#[cfg(feature = "server")]
+pub async fn fetch_specific_criteria_for_product_type(
+    pool: &PgPool,
+    product_type_id: &str,
+) -> Result<Vec<Criterion>, sqlx::Error> {
+    let criteria = sqlx::query_as!(
+        Criterion,
+        r#"
+        SELECT c.id, c.name, c.description, c.emoji
+        FROM criteria c
+        JOIN product_type_specific_criteria pts ON c.id = pts.criterion_id
+        WHERE pts.product_type_id = $1
+        ORDER BY c.name
+        "#,
+        product_type_id
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(criteria)
+}
+
+// Fetch all categories, including their associated criteria
+#[cfg(feature = "server")]
+pub async fn fetch_all_categories(pool: &PgPool) -> Result<Vec<Category>, sqlx::Error> {
+    let categories_rows =
+        sqlx::query("SELECT id, name, description, emoji FROM categories ORDER BY name")
+            .fetch_all(pool)
+            .await?;
+
+    let mut categories: Vec<Category> = categories_rows
+        .into_iter()
+        .map(|row| Category {
+            id: row.get("id"),
+            name: row.get("name"),
+            description: row.get("description"),
+            emoji: row.get("emoji"),
+            criteria: Vec::new(), // Initialize empty, will be populated below
+        })
+        .collect();
+
+    // Fetch all criteria once to avoid multiple queries inside the loop if possible,
+    // but for category-specific criteria, we still need to query per category.
+    // A more optimized approach might fetch all category_criteria mappings first.
+    // For now, we rely on fetch_criteria_for_category.
+    // let all_criteria = fetch_all_criteria(pool).await?; // This fetches all criteria, not specific to category
+
+    for category in &mut categories {
+        // Fetch criteria specifically for this category using the helper
+        let category_criteria = fetch_criteria_for_category(pool, &category.id).await?;
+        category.criteria = category_criteria;
+    }
+
+    Ok(categories)
+}
+
+// Fetch all product types, including their associated category IDs and specific criteria
+#[cfg(feature = "server")]
+pub async fn fetch_all_product_types(pool: &PgPool) -> Result<Vec<ProductType>, sqlx::Error> {
+    let product_types_rows =
+        sqlx::query("SELECT id, name, description, emoji FROM product_types ORDER BY name")
+            .fetch_all(pool)
+            .await?;
+
+    let mut product_types: Vec<ProductType> = product_types_rows
+        .into_iter()
+        .map(|row| ProductType {
+            id: row.get("id"),
+            name: row.get("name"),
+            description: row.get("description"),
+            emoji: row.get("emoji"),
+            category_ids: Vec::new(),      // Initialize empty
+            specific_criteria: Vec::new(), // Initialize empty
+            presets: Vec::new(),           // Initialize empty
+        })
+        .collect();
+
+    for pt in &mut product_types {
+        // Fetch associated category IDs
+        let category_ids_rows = sqlx::query(
+            "SELECT category_id FROM product_type_categories WHERE product_type_id = $1",
+        )
+        .bind(&pt.id)
+        .fetch_all(pool)
+        .await?;
+        pt.category_ids = category_ids_rows
+            .iter()
+            .map(|row| row.get("category_id"))
+            .collect();
+
+        // Fetch specific criteria and presets for this product type
+        pt.specific_criteria = fetch_specific_criteria_for_product_type(pool, &pt.id).await?;
+        pt.presets = fetch_weight_profiles_for_product_type(pool, &pt.id).await?;
+    }
+
+    Ok(product_types)
+}
+
+#[cfg(feature = "server")]
+pub async fn fetch_weight_profiles_for_product_type(
+    pool: &PgPool,
+    product_type_id: &str,
+) -> Result<Vec<WeightProfile>, sqlx::Error> {
+    let rows = sqlx::query(
+        "SELECT name, weights FROM weight_profiles WHERE product_type_id = $1 ORDER BY name",
+    )
+    .bind(product_type_id)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| {
+            let weights: Json<HashMap<String, f64>> = row.get("weights");
+            WeightProfile {
+                name: row.get("name"),
+                weights: weights.0,
+            }
+        })
+        .collect())
+}
+
+// Fetch all products, including their scores.
+#[cfg(feature = "server")]
+pub async fn fetch_all_products(pool: &PgPool) -> Result<Vec<Product>, sqlx::Error> {
+    let products_rows =
+        sqlx::query("SELECT id, name, description, product_type_id FROM products ORDER BY name")
+            .fetch_all(pool)
+            .await?;
+
+    let mut products = Vec::new();
+    for row in products_rows {
+        let product_id: String = row.get("id");
+        let scores = fetch_scores_for_product(pool, &product_id).await?;
+        products.push(Product {
+            id: product_id,
+            name: row.get("name"),
+            description: row.get("description"),
+            product_type_id: row.get("product_type_id"),
+            scores,
+        });
+    }
+
+    Ok(products)
+}
+
+// Fetch scores for a specific product
+#[cfg(feature = "server")]
+pub async fn fetch_scores_for_product(
+    pool: &PgPool,
+    product_id: &str,
+) -> Result<HashMap<String, f64>, sqlx::Error> {
+    let scores_rows =
+        sqlx::query("SELECT criterion_id, score FROM product_scores WHERE product_id = $1")
+            .bind(product_id)
+            .fetch_all(pool)
+            .await?;
+
+    let mut scores = HashMap::new();
+    for row in scores_rows {
+        let criterion_id: String = row.get("criterion_id");
+        let score: f32 = row.get("score");
+        scores.insert(criterion_id, f64::from(score));
+    }
+    Ok(scores)
+}
+
+#[get("/api/app-data")]
+pub async fn load_app_data() -> Result<AppData, ServerFnError> {
+    let pool = crate::db::server::get_pool().await;
+
+    let categories = fetch_all_categories(pool)
+        .await
+        .map_err(|err| ServerFnError::new(err.to_string()))?;
+    let product_types = fetch_all_product_types(pool)
+        .await
+        .map_err(|err| ServerFnError::new(err.to_string()))?;
+    let products = fetch_all_products(pool)
+        .await
+        .map_err(|err| ServerFnError::new(err.to_string()))?;
+
+    Ok(AppData {
+        categories,
+        product_types,
+        products,
+    })
+}
+
+pub fn calculate_score(product: &Product, weights: &HashMap<String, f64>) -> f64 {
+    let mut total_score = 0.0;
+    let mut total_weight = 0.0;
+
+    for (criterion_id, score) in &product.scores {
+        let weight = weights.get(criterion_id).copied().unwrap_or(5.0);
+        total_score += score * weight;
+        total_weight += weight;
     }
 
     if total_weight > 0.0 {
-        weighted_sum / total_weight
+        total_score / total_weight
     } else {
         0.0
     }
 }
 
-/// Computes the union of criteria inherited from all categories of a product type + its specific criteria.
-pub fn get_combined_criteria(product_type: &ProductType, categories: &[Category]) -> Vec<Criterion> {
+pub fn get_combined_criteria(
+    product_type: &ProductType,
+    categories: &[Category],
+) -> Vec<Criterion> {
     let mut list = Vec::new();
     let mut seen = std::collections::HashSet::new();
 
-    // First inherit category-level criteria
-    for cat_id in &product_type.category_ids {
-        if let Some(cat) = categories.iter().find(|c| c.id == *cat_id) {
-            for crit in &cat.criteria {
-                if seen.insert(crit.id.clone()) {
-                    list.push(crit.clone());
+    // Add specific criteria for the product type
+    for criterion in &product_type.specific_criteria {
+        if seen.insert(criterion.id.clone()) {
+            list.push(criterion.clone());
+        }
+    }
+
+    // Add criteria from associated categories
+    for category_id in &product_type.category_ids {
+        if let Some(category) = categories.iter().find(|c| c.id == *category_id) {
+            for criterion in &category.criteria {
+                if seen.insert(criterion.id.clone()) {
+                    list.push(criterion.clone());
                 }
             }
         }
     }
 
-    // Then add product-type specific criteria
-    for crit in &product_type.specific_criteria {
-        if seen.insert(crit.id.clone()) {
-            list.push(crit.clone());
-        }
-    }
-
+    // Sort criteria by name for consistent ordering
+    list.sort_by(|a, b| a.name.cmp(&b.name));
     list
-}
-
-/// Seed the initial mock categories.
-pub fn get_mock_categories() -> Vec<Category> {
-    vec![
-        Category {
-            id: "food".to_string(),
-            name: "Food & Beverage".to_string(),
-            description: "Assess consumption items based on resource usage, farming practices, and footprint.".to_string(),
-            emoji: "🍎".to_string(),
-            criteria: vec![
-                Criterion {
-                    id: "carbon_footprint".to_string(),
-                    name: "Carbon Footprint".to_string(),
-                    description: "CO2 equivalent emissions per kg produced, including transport/packaging.".to_string(),
-                    emoji: "🌍".to_string(),
-                },
-                Criterion {
-                    id: "sourcing_ethics".to_string(),
-                    name: "Sourcing Ethics".to_string(),
-                    description: "Fair-trade guarantees, direct trade links, and organic/eco farming methods.".to_string(),
-                    emoji: "🤝".to_string(),
-                },
-            ],
-        },
-        Category {
-            id: "technology".to_string(),
-            name: "Electronics & Tech".to_string(),
-            description: "Evaluate electronic devices based on ethical supply chains and hardware recyclability.".to_string(),
-            emoji: "⚡".to_string(),
-            criteria: vec![
-                Criterion {
-                    id: "e_waste".to_string(),
-                    name: "E-Waste & Recycling".to_string(),
-                    description: "Proportion of recycled circular materials and ease of end-of-life recycling.".to_string(),
-                    emoji: "♻️".to_string(),
-                },
-                Criterion {
-                    id: "sourcing_ethics".to_string(),
-                    name: "Supply Chain Ethics".to_string(),
-                    description: "Fair mineral sourcing, sweatshop-free labor standards, and supplier audits.".to_string(),
-                    emoji: "🤝".to_string(),
-                },
-            ],
-        },
-        Category {
-            id: "furniture".to_string(),
-            name: "Home & Lifestyle".to_string(),
-            description: "Focus on ergonomics, material quality, and expected longevity of furniture/decor.".to_string(),
-            emoji: "🏡".to_string(),
-            criteria: vec![
-                Criterion {
-                    id: "durability".to_string(),
-                    name: "Longevity & Durability".to_string(),
-                    description: "Expected lifetime under normal use and warranty coverage.".to_string(),
-                    emoji: "🛡️".to_string(),
-                },
-            ],
-        },
-    ]
-}
-
-/// Seed the initial mock product types.
-pub fn get_mock_product_types() -> Vec<ProductType> {
-    vec![
-        ProductType {
-            id: "smartphones".to_string(),
-            name: "Smartphones".to_string(),
-            description: "Compare features like photo output, performance speed, and repair modularity.".to_string(),
-            emoji: "📱".to_string(),
-            category_ids: vec!["technology".to_string()],
-            specific_criteria: vec![
-                Criterion {
-                    id: "camera".to_string(),
-                    name: "Camera Quality".to_string(),
-                    description: "Image details, zoom options, low-light processing, and video stabilization.".to_string(),
-                    emoji: "📷".to_string(),
-                },
-                Criterion {
-                    id: "battery".to_string(),
-                    name: "Battery & Charging".to_string(),
-                    description: "Screen-on time under load and fast-charging capabilities.".to_string(),
-                    emoji: "🔋".to_string(),
-                },
-                Criterion {
-                    id: "reparability".to_string(),
-                    name: "Reparability Index".to_string(),
-                    description: "Availability of replacement screens/batteries and ease of disassembly.".to_string(),
-                    emoji: "🔧".to_string(),
-                },
-                Criterion {
-                    id: "performance".to_string(),
-                    name: "Performance & Gaming".to_string(),
-                    description: "App launching speed, multitasking smoothness, and thermal throttling.".to_string(),
-                    emoji: "⚡".to_string(),
-                },
-            ],
-            presets: vec![
-                WeightProfile {
-                    name: "Balanced Default".to_string(),
-                    weights: [
-                        ("e_waste".to_string(), 5.0),
-                        ("sourcing_ethics".to_string(), 5.0),
-                        ("camera".to_string(), 5.0),
-                        ("battery".to_string(), 5.0),
-                        ("reparability".to_string(), 5.0),
-                        ("performance".to_string(), 5.0),
-                    ].into_iter().collect(),
-                },
-                WeightProfile {
-                    name: "Eco & Repair Advocate".to_string(),
-                    weights: [
-                        ("e_waste".to_string(), 8.0),
-                        ("sourcing_ethics".to_string(), 9.0),
-                        ("camera".to_string(), 3.0),
-                        ("battery".to_string(), 5.0),
-                        ("reparability".to_string(), 10.0),
-                        ("performance".to_string(), 3.0),
-                    ].into_iter().collect(),
-                },
-                WeightProfile {
-                    name: "Power Gamer / Geek".to_string(),
-                    weights: [
-                        ("e_waste".to_string(), 2.0),
-                        ("sourcing_ethics".to_string(), 3.0),
-                        ("camera".to_string(), 7.0),
-                        ("battery".to_string(), 8.0),
-                        ("reparability".to_string(), 2.0),
-                        ("performance".to_string(), 10.0),
-                    ].into_iter().collect(),
-                },
-            ],
-        },
-        ProductType {
-            id: "coffee".to_string(),
-            name: "Specialty Coffee".to_string(),
-            description: "Grade specialty coffee beans on flavor notes, acidity, body, and aroma complexity.".to_string(),
-            emoji: "☕".to_string(),
-            category_ids: vec!["food".to_string()],
-            specific_criteria: vec![
-                Criterion {
-                    id: "aroma".to_string(),
-                    name: "Fragrance & Aroma".to_string(),
-                    description: "Complexity and intensity of the dry grounds and wet brew scent.".to_string(),
-                    emoji: "👃".to_string(),
-                },
-                Criterion {
-                    id: "acidity".to_string(),
-                    name: "Crisp Acidity".to_string(),
-                    description: "Bright fruit notes and clean, sparkling sensation on the tongue.".to_string(),
-                    emoji: "🍋".to_string(),
-                },
-                Criterion {
-                    id: "body".to_string(),
-                    name: "Mouthfeel & Body".to_string(),
-                    description: "Texture, weight, and creaminess on the palate.".to_string(),
-                    emoji: "🥛".to_string(),
-                },
-                Criterion {
-                    id: "sweetness".to_string(),
-                    name: "Natural Sweetness".to_string(),
-                    description: "Caramel, chocolate, or ripe berry sugars without adding sweeteners.".to_string(),
-                    emoji: "🍯".to_string(),
-                },
-            ],
-            presets: vec![
-                WeightProfile {
-                    name: "Balanced Filter Roast".to_string(),
-                    weights: [
-                        ("carbon_footprint".to_string(), 5.0),
-                        ("sourcing_ethics".to_string(), 5.0),
-                        ("aroma".to_string(), 6.0),
-                        ("acidity".to_string(), 6.0),
-                        ("body".to_string(), 4.0),
-                        ("sweetness".to_string(), 6.0),
-                    ].into_iter().collect(),
-                },
-                WeightProfile {
-                    name: "Bright & Fruity".to_string(),
-                    weights: [
-                        ("carbon_footprint".to_string(), 4.0),
-                        ("sourcing_ethics".to_string(), 6.0),
-                        ("aroma".to_string(), 9.0),
-                        ("acidity".to_string(), 10.0),
-                        ("body".to_string(), 2.0),
-                        ("sweetness".to_string(), 8.0),
-                    ].into_iter().collect(),
-                },
-                WeightProfile {
-                    name: "Rich & Heavy Espresso".to_string(),
-                    weights: [
-                        ("carbon_footprint".to_string(), 4.0),
-                        ("sourcing_ethics".to_string(), 6.0),
-                        ("aroma".to_string(), 8.0),
-                        ("acidity".to_string(), 2.0),
-                        ("body".to_string(), 10.0),
-                        ("sweetness".to_string(), 8.0),
-                    ].into_iter().collect(),
-                },
-            ],
-        },
-        ProductType {
-            id: "rice".to_string(),
-            name: "Premium Rice".to_string(),
-            description: "Evaluate gourmet rice grains on scent, texture, grain length, and fluffiness.".to_string(),
-            emoji: "🌾".to_string(),
-            category_ids: vec!["food".to_string()],
-            specific_criteria: vec![
-                Criterion {
-                    id: "texture".to_string(),
-                    name: "Texture & Grain".to_string(),
-                    description: "Softness, fluffiness, and length of grain when cooked correctly.".to_string(),
-                    emoji: "🌾".to_string(),
-                },
-                Criterion {
-                    id: "fragrance".to_string(),
-                    name: "Natural Aroma".to_string(),
-                    description: "Strength of jasmine/pandan floral scents or basmati nutty aromas.".to_string(),
-                    emoji: "🌸".to_string(),
-                },
-            ],
-            presets: vec![
-                WeightProfile {
-                    name: "Balanced Cooking".to_string(),
-                    weights: [
-                        ("carbon_footprint".to_string(), 5.0),
-                        ("sourcing_ethics".to_string(), 5.0),
-                        ("texture".to_string(), 6.0),
-                        ("fragrance".to_string(), 6.0),
-                    ].into_iter().collect(),
-                },
-                WeightProfile {
-                    name: "Aromatic & Fluffy First".to_string(),
-                    weights: [
-                        ("carbon_footprint".to_string(), 4.0),
-                        ("sourcing_ethics".to_string(), 7.0),
-                        ("texture".to_string(), 7.0),
-                        ("fragrance".to_string(), 10.0),
-                    ].into_iter().collect(),
-                },
-            ],
-        },
-        ProductType {
-            id: "office_chairs".to_string(),
-            name: "Office Chairs".to_string(),
-            description: "Grade ergonomic desk seating on posture adjustments and lumbar support quality.".to_string(),
-            emoji: "💺".to_string(),
-            category_ids: vec!["furniture".to_string()],
-            specific_criteria: vec![
-                Criterion {
-                    id: "ergonomics".to_string(),
-                    name: "Lumbar Support".to_string(),
-                    description: "Spinal support alignment, posture correction, and mesh breathability.".to_string(),
-                    emoji: "💺".to_string(),
-                },
-                Criterion {
-                    id: "adjustability".to_string(),
-                    name: "Custom Adjustments".to_string(),
-                    description: "Armrest, tilt lock, seat depth, and height customization ranges.".to_string(),
-                    emoji: "⚙️".to_string(),
-                },
-            ],
-            presets: vec![
-                WeightProfile {
-                    name: "Ergonomic Office Worker".to_string(),
-                    weights: [
-                        ("durability".to_string(), 8.0),
-                        ("ergonomics".to_string(), 10.0),
-                        ("adjustability".to_string(), 9.0),
-                    ].into_iter().collect(),
-                },
-                WeightProfile {
-                    name: "Minimalist Durable".to_string(),
-                    weights: [
-                        ("durability".to_string(), 10.0),
-                        ("ergonomics".to_string(), 6.0),
-                        ("adjustability".to_string(), 5.0),
-                    ].into_iter().collect(),
-                },
-            ],
-        },
-    ]
-}
-
-/// Seed the initial mock products.
-pub fn get_mock_products() -> Vec<Product> {
-    vec![
-        // Smartphones
-        Product {
-            id: "iphone-15-pro".to_string(),
-            name: "iPhone 15 Pro".to_string(),
-            description: "Premium titanium flagship with class-leading video and processor performance, but locked down design.".to_string(),
-            product_type_id: "smartphones".to_string(),
-            scores: [
-                ("e_waste".to_string(), 4.5),
-                ("sourcing_ethics".to_string(), 5.0),
-                ("camera".to_string(), 9.4),
-                ("battery".to_string(), 8.0),
-                ("reparability".to_string(), 4.2),
-                ("performance".to_string(), 9.7),
-            ].into_iter().collect(),
-        },
-        Product {
-            id: "galaxy-s24-ultra".to_string(),
-            name: "Galaxy S24 Ultra".to_string(),
-            description: "Large display, versatile cameras, and styling pen. High performance and price tag.".to_string(),
-            product_type_id: "smartphones".to_string(),
-            scores: [
-                ("e_waste".to_string(), 5.0),
-                ("sourcing_ethics".to_string(), 4.8),
-                ("camera".to_string(), 9.5),
-                ("battery".to_string(), 8.8),
-                ("reparability".to_string(), 5.0),
-                ("performance".to_string(), 9.6),
-            ].into_iter().collect(),
-        },
-        Product {
-            id: "fairphone-5".to_string(),
-            name: "Fairphone 5".to_string(),
-            description: "Modular, highly sustainable phone designed for self-repair with an industry-best 5-year warranty.".to_string(),
-            product_type_id: "smartphones".to_string(),
-            scores: [
-                ("e_waste".to_string(), 9.5),
-                ("sourcing_ethics".to_string(), 9.8),
-                ("camera".to_string(), 6.5),
-                ("battery".to_string(), 7.5),
-                ("reparability".to_string(), 10.0),
-                ("performance".to_string(), 6.8),
-            ].into_iter().collect(),
-        },
-        Product {
-            id: "pixel-8a".to_string(),
-            name: "Google Pixel 8a".to_string(),
-            description: "Incredible price-to-performance value, delivering flagship-grade photos and Google AI features.".to_string(),
-            product_type_id: "smartphones".to_string(),
-            scores: [
-                ("e_waste".to_string(), 5.5),
-                ("sourcing_ethics".to_string(), 5.8),
-                ("camera".to_string(), 8.8),
-                ("battery".to_string(), 7.8),
-                ("reparability".to_string(), 5.5),
-                ("performance".to_string(), 8.0),
-            ].into_iter().collect(),
-        },
-        // Specialty Coffee
-        Product {
-            id: "ethiopian-yirgacheffe".to_string(),
-            name: "Ethiopian Yirgacheffe".to_string(),
-            description: "Renowned for its bright citrus acidity, elegant floral aroma, and tea-like light body.".to_string(),
-            product_type_id: "coffee".to_string(),
-            scores: [
-                ("carbon_footprint".to_string(), 7.5),
-                ("sourcing_ethics".to_string(), 8.2),
-                ("aroma".to_string(), 9.6),
-                ("acidity".to_string(), 9.2),
-                ("body".to_string(), 4.5),
-                ("sweetness".to_string(), 8.8),
-            ].into_iter().collect(),
-        },
-        Product {
-            id: "colombian-supremo".to_string(),
-            name: "Colombian Supremo".to_string(),
-            description: "A classic crowd-pleaser. Extremely balanced with rich caramel sweetness and medium body.".to_string(),
-            product_type_id: "coffee".to_string(),
-            scores: [
-                ("carbon_footprint".to_string(), 6.8),
-                ("sourcing_ethics".to_string(), 8.5),
-                ("aroma".to_string(), 8.2),
-                ("acidity".to_string(), 6.5),
-                ("body".to_string(), 7.6),
-                ("sweetness".to_string(), 8.5),
-            ].into_iter().collect(),
-        },
-        Product {
-            id: "sumatran-mandheling".to_string(),
-            name: "Sumatran Mandheling".to_string(),
-            description: "Deeply complex, earthy, low acid, and full-bodied with notes of dark chocolate and cedarwood.".to_string(),
-            product_type_id: "coffee".to_string(),
-            scores: [
-                ("carbon_footprint".to_string(), 7.2),
-                ("sourcing_ethics".to_string(), 7.0),
-                ("aroma".to_string(), 7.8),
-                ("acidity".to_string(), 3.2),
-                ("body".to_string(), 9.5),
-                ("sweetness".to_string(), 6.0),
-            ].into_iter().collect(),
-        },
-        Product {
-            id: "mass-market-roast".to_string(),
-            name: "Supermarket Blend".to_string(),
-            description: "Generic commercial dark roast, bitter and flat, sourced through industrial farm channels.".to_string(),
-            product_type_id: "coffee".to_string(),
-            scores: [
-                ("carbon_footprint".to_string(), 3.8),
-                ("sourcing_ethics".to_string(), 2.5),
-                ("aroma".to_string(), 3.5),
-                ("acidity".to_string(), 4.0),
-                ("body".to_string(), 5.5),
-                ("sweetness".to_string(), 3.0),
-            ].into_iter().collect(),
-        },
-        // Premium Rice
-        Product {
-            id: "jasmine-rice".to_string(),
-            name: "Premium Jasmine Rice".to_string(),
-            description: "Fragrant, soft, and slightly sticky, excellent with Asian culinary dishes.".to_string(),
-            product_type_id: "rice".to_string(),
-            scores: [
-                ("carbon_footprint".to_string(), 7.5),
-                ("sourcing_ethics".to_string(), 8.0),
-                ("texture".to_string(), 9.0),
-                ("fragrance".to_string(), 9.5),
-            ].into_iter().collect(),
-        },
-        Product {
-            id: "basmati-rice".to_string(),
-            name: "Gourmet Basmati Rice".to_string(),
-            description: "Long, slender, aromatic grain that remains fluffy and separate after cooking.".to_string(),
-            product_type_id: "rice".to_string(),
-            scores: [
-                ("carbon_footprint".to_string(), 7.0),
-                ("sourcing_ethics".to_string(), 7.8),
-                ("texture".to_string(), 9.2),
-                ("fragrance".to_string(), 9.0),
-            ].into_iter().collect(),
-        },
-        Product {
-            id: "cheap-white-rice".to_string(),
-            name: "Bulk White Rice".to_string(),
-            description: "Generic commercial white rice, standard processing, high yield, low trace sourcing ethics.".to_string(),
-            product_type_id: "rice".to_string(),
-            scores: [
-                ("carbon_footprint".to_string(), 5.0),
-                ("sourcing_ethics".to_string(), 3.0),
-                ("texture".to_string(), 5.5),
-                ("fragrance".to_string(), 3.0),
-            ].into_iter().collect(),
-        },
-        // Office Chairs
-        Product {
-            id: "herman-miller-aeron".to_string(),
-            name: "Herman Miller Aeron".to_string(),
-            description: "The gold standard of ergonomic mesh chairs, built with high recyclability and a 12-year warranty.".to_string(),
-            product_type_id: "office_chairs".to_string(),
-            scores: [
-                ("durability".to_string(), 9.8),
-                ("ergonomics".to_string(), 9.6),
-                ("adjustability".to_string(), 9.2),
-            ].into_iter().collect(),
-        },
-        Product {
-            id: "steelcase-gesture".to_string(),
-            name: "Steelcase Gesture".to_string(),
-            description: "Premium fabric chair designed to support diverse posture styles and continuous movement.".to_string(),
-            product_type_id: "office_chairs".to_string(),
-            scores: [
-                ("durability".to_string(), 9.5),
-                ("ergonomics".to_string(), 9.5),
-                ("adjustability".to_string(), 9.8),
-            ].into_iter().collect(),
-        },
-        Product {
-            id: "budget-mesh-chair".to_string(),
-            name: "Basic Task Chair".to_string(),
-            description: "Standard plastic office chair with simple height adjust and thin padding, short lifespan.".to_string(),
-            product_type_id: "office_chairs".to_string(),
-            scores: [
-                ("durability".to_string(), 4.0),
-                ("ergonomics".to_string(), 5.0),
-                ("adjustability".to_string(), 4.5),
-            ].into_iter().collect(),
-        },
-    ]
 }

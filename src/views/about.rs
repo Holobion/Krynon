@@ -1,12 +1,12 @@
-use dioxus::prelude::*;
 use crate::Route;
+use dioxus::prelude::*;
 
 #[component]
 pub fn About() -> Element {
     rsx! {
         div {
             class: "max-w-4xl mx-auto px-6 py-12 space-y-12",
-            
+
             // Section 1: The Etymology of Krinein
             div {
                 class: "space-y-4",
@@ -37,10 +37,10 @@ pub fn About() -> Element {
             div {
                 class: "bg-hb-cytoplasm border border-hb-matrix/10 hb-squarcle p-6 sm:p-8 space-y-6 shadow-sm",
                 h2 { class: "text-2xl font-bold text-hb-nucleus tracking-tight font-display", "Why Generic 5-Star Reviews Fail" }
-                
+
                 div {
                     class: "grid grid-cols-1 md:grid-cols-2 gap-6",
-                    
+
                     div {
                         class: "space-y-2 border-l-2 border-rose-500/40 pl-4",
                         h3 { class: "text-sm font-bold text-rose-600", "The Problem with Averages" }
@@ -72,7 +72,7 @@ pub fn About() -> Element {
                 class: "space-y-4",
                 h2 { class: "text-2xl font-bold text-hb-nucleus tracking-tight font-display", "The Mathematical Formula" }
                 p { class: "text-hb-matrix text-sm leading-relaxed", "The sorting engine calculates the final normalized score of a product using a weighted average. Each product has a fixed score between 0.0 and 10.0 for each criterion, and the user provides the weights:" }
-                
+
                 div {
                     class: "bg-hb-cytoplasm border border-hb-matrix/10 p-6 hb-squarcle flex flex-col items-center justify-center text-center shadow-sm",
                     span { class: "text-xs font-bold text-hb-matrix uppercase tracking-widest mb-3", "Weighted Average Formula" }
@@ -115,7 +115,7 @@ pub fn About() -> Element {
                 class: "border-t border-hb-matrix/10 pt-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6",
                 div {
                     h3 { class: "font-bold text-hb-nucleus text-base font-display", "Interested in how Krynon evolves?" }
-                    p { class: "text-hb-matrix text-xs mt-1", "Check our development plan for the SQLite database MVP and PostgreSQL release structures." }
+                    p { class: "text-hb-matrix text-xs mt-1", "Check our development plan for the PostgreSQL release structures." }
                 }
                 Link {
                     to: Route::Compare {},

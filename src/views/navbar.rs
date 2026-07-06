@@ -7,16 +7,28 @@ pub fn Navbar() -> Element {
     let navigator = use_navigator();
     let mut search_query = use_context::<Signal<String>>();
 
-    let home_class = if matches!(route, Route::Home {}) { "text-hb-primary" } else { "text-hb-matrix hover:text-hb-nucleus" };
-    let compare_class = if matches!(route, Route::Compare {}) { "text-hb-primary" } else { "text-hb-matrix hover:text-hb-nucleus" };
-    let about_class = if matches!(route, Route::About {}) { "text-hb-primary" } else { "text-hb-matrix hover:text-hb-nucleus" };
+    let home_class = if matches!(route, Route::Home {}) {
+        "text-hb-primary"
+    } else {
+        "text-hb-matrix hover:text-hb-nucleus"
+    };
+    let compare_class = if matches!(route, Route::Compare {}) {
+        "text-hb-primary"
+    } else {
+        "text-hb-matrix hover:text-hb-nucleus"
+    };
+    let about_class = if matches!(route, Route::About {}) {
+        "text-hb-primary"
+    } else {
+        "text-hb-matrix hover:text-hb-nucleus"
+    };
 
     rsx! {
         header {
             class: "sticky top-0 z-50 w-full hb-glass border-b border-hb-matrix/10 px-6 py-4",
             div {
                 class: "max-w-6xl mx-auto flex justify-between items-center",
-                
+
                 // Brand Logo
                 Link {
                     to: Route::Home {},
@@ -81,11 +93,11 @@ pub fn Navbar() -> Element {
                         }
                     }
                 }
-                
+
                 // Nav Items
                 nav {
                     class: "flex items-center gap-5 sm:gap-8",
-                    
+
                     Link {
                         to: Route::Home {},
                         class: "text-xs sm:text-sm font-bold uppercase tracking-wider transition-colors {home_class}",
@@ -104,14 +116,14 @@ pub fn Navbar() -> Element {
                 }
             }
         }
-        
+
         main {
             class: "min-h-[calc(100vh-73px)] bg-hb-membrane text-hb-nucleus flex flex-col justify-between",
             div {
                 class: "flex-grow",
                 Outlet::<Route> {}
             }
-            
+
             // Shared Footer
             footer {
                 class: "border-t border-hb-matrix/10 bg-hb-membrane py-8 px-6 text-center text-xs text-hb-matrix",

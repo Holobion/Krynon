@@ -1,41 +1,63 @@
 use crate::components::Hero;
-use crate::model::{
-    get_mock_categories, get_mock_product_types, get_mock_products,
-    calculate_score, get_combined_criteria, Product
-};
+use crate::model::{calculate_score, get_combined_criteria, load_app_data, Product};
 use crate::Route;
 use dioxus::prelude::*;
 
 #[component]
 pub fn Home() -> Element {
-    let categories = get_mock_categories();
-    let product_types = get_mock_product_types();
-    let products = get_mock_products();
+    let data = use_resource(move || async move { load_app_data().await });
 
-    let smartphone_type = product_types.iter().find(|p| p.id == "smartphones").unwrap().clone();
-    let smartphone_criteria = get_combined_criteria(&smartphone_type, &categories);
-    let smartphone_products: Vec<Product> = products.iter()
-        .filter(|p| p.product_type_id == "smartphones")
-        .cloned()
-        .collect();
-    
     // Manage active preset index for the mini-demo
     let mut selected_preset_idx = use_signal(|| 1); // Default to Eco Advocate
 
-    let current_preset = &smartphone_type.presets[selected_preset_idx()];
-    
+    let Some(data_result) = data() else {
+        return rsx! { div { class: "max-w-6xl mx-auto px-6 py-20 text-hb-matrix", "Loading product data..." } };
+    };
+
+    let Ok(data) = data_result else {
+        return rsx! { div { class: "max-w-6xl mx-auto px-6 py-20 text-rose-600", "Failed to load product data." } };
+    };
+
+    let categories = data.categories;
+    let product_types = data.product_types;
+    let products = data.products;
+
+    let Some(smartphone_type) = product_types
+        .iter()
+        .find(|p| p.id == "smartphones")
+        .cloned()
+    else {
+        return rsx! { div { class: "max-w-6xl mx-auto px-6 py-20 text-hb-matrix", "No smartphone product type found." } };
+    };
+
+    if smartphone_type.presets.is_empty() {
+        return rsx! { div { class: "max-w-6xl mx-auto px-6 py-20 text-hb-matrix", "No smartphone presets found." } };
+    }
+
+    let preset_idx = selected_preset_idx().min(smartphone_type.presets.len() - 1);
+    let smartphone_criteria = get_combined_criteria(&smartphone_type, &categories);
+    let smartphone_products: Vec<Product> = products
+        .iter()
+        .filter(|p| p.product_type_id == "smartphones")
+        .cloned()
+        .collect();
+
+    let current_preset = &smartphone_type.presets[preset_idx];
+
     // Sort products based on active preset weights
     let mut sorted_products = smartphone_products.clone();
     sorted_products.sort_by(|a, b| {
         let score_a = calculate_score(a, &current_preset.weights);
         let score_b = calculate_score(b, &current_preset.weights);
-        score_b.partial_cmp(&score_a).unwrap_or(std::cmp::Ordering::Equal)
+        score_b
+            .partial_cmp(&score_a)
+            .unwrap_or(std::cmp::Ordering::Equal)
     });
 
     rsx! {
         div {
             class: "pb-20",
-            
+
             // Hero Section
             Hero {}
 
@@ -76,7 +98,7 @@ pub fn Home() -> Element {
                 // Split demo block
                 div {
                     class: "grid grid-cols-1 lg:grid-cols-12 gap-8 bg-hb-cytoplasm border border-hb-matrix/10 hb-squarcle p-6 sm:p-8 shadow-sm",
-                    
+
                     // Left Column: Show the weights for this profile
                     div {
                         class: "lg:col-span-5 flex flex-col justify-between space-y-6",
@@ -84,7 +106,7 @@ pub fn Home() -> Element {
                             h3 { class: "text-lg font-bold text-hb-nucleus font-display", "Profile Configuration" }
                             p { class: "text-xs text-hb-matrix mt-1 leading-relaxed", "The relative weights assigned to each product attribute for this profile (on a scale of 0 to 10):" }
                         }
-                        
+
                         div {
                             class: "space-y-4",
                             for criterion in &smartphone_criteria {
@@ -128,7 +150,7 @@ pub fn Home() -> Element {
                     div {
                         class: "lg:col-span-7 space-y-3",
                         h3 { class: "text-lg font-bold text-hb-nucleus mb-4 font-display", "Resulting Rank Order" }
-                        
+
                         for (rank_idx, product) in sorted_products.iter().take(3).enumerate() {
                             {
                                 let rank = rank_idx + 1;
@@ -173,7 +195,7 @@ pub fn Home() -> Element {
             // Features Grid Section
             div {
                 class: "max-w-6xl mx-auto px-6 py-16 border-t border-hb-matrix/10 grid grid-cols-1 md:grid-cols-3 gap-8",
-                
+
                 div {
                     class: "flex flex-col gap-3 p-6 hb-squarcle bg-hb-cytoplasm border border-hb-matrix/10 shadow-sm hover:border-hb-primary/20 hover:scale-[1.01] transition-all duration-300",
                     span { class: "text-2xl", "🔬" }
@@ -203,10 +225,10 @@ pub fn Home() -> Element {
                     class: "p-8 sm:p-12 hb-squarcle bg-gradient-to-r from-hb-cytoplasm via-emerald-50/20 to-teal-50/10 border border-hb-primary/10 text-center relative overflow-hidden shadow-sm",
                     div { class: "absolute -right-24 -bottom-24 w-80 h-80 bg-hb-primary/5 rounded-full blur-3xl -z-10" }
                     div { class: "absolute -left-24 -top-24 w-80 h-80 bg-teal-500/5 rounded-full blur-3xl -z-10" }
-                    
+
                     h2 { class: "text-2xl sm:text-3xl font-extrabold text-hb-nucleus tracking-tight font-display", "Ready to discover your perfect match?" }
                     p { class: "text-hb-matrix text-sm sm:text-base max-w-xl mx-auto mt-4 leading-relaxed", "Enter the comparison workspace to tweak weights, review detailed product matrices, and find the perfect smartphone, specialty coffee, or running shoe." }
-                    
+
                     div {
                         class: "mt-8 flex justify-center",
                         Link {

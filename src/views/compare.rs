@@ -1,9 +1,9 @@
-use dioxus::prelude::*;
+use crate::components::{ProductCard, WeightSlider};
 use crate::model::{
-    get_mock_categories, get_mock_product_types, get_mock_products,
-    calculate_score, get_combined_criteria, Product, Category, ProductType, Criterion
+    calculate_score, get_combined_criteria, load_app_data, Category, Criterion, Product,
+    ProductType,
 };
-use crate::components::{WeightSlider, ProductCard};
+use dioxus::prelude::*;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -21,9 +21,11 @@ enum CreationMode {
 
 #[component]
 pub fn Compare() -> Element {
-    let mut categories = use_signal(|| get_mock_categories());
-    let mut product_types = use_signal(|| get_mock_product_types());
-    let products = use_signal(|| get_mock_products());
+    let data = use_resource(move || async move { load_app_data().await });
+
+    let mut categories = use_signal(Vec::<Category>::new);
+    let mut product_types = use_signal(Vec::<ProductType>::new);
+    let mut products = use_signal(Vec::<Product>::new);
 
     let mut workspace_mode = use_signal(|| WorkspaceMode::ProductType);
     let mut selected_prod_type_idx = use_signal(|| 0);
@@ -41,16 +43,26 @@ pub fn Compare() -> Element {
     let mut temp_crit_desc = use_signal(|| "".to_string());
     let mut temp_crit_emoji = use_signal(|| "".to_string());
 
-    // Initial weights setup
-    let mut weights = use_signal(|| {
-        let mut map = HashMap::new();
-        let pts = get_mock_product_types();
-        let cats = get_mock_categories();
-        let combined = get_combined_criteria(&pts[0], &cats);
-        for crit in combined {
-            map.insert(crit.id.clone(), 5.0);
+    // Initial weights setup. Populated once DB data is loaded.
+    let mut weights = use_signal(HashMap::<String, f64>::new);
+
+    use_effect(move || {
+        if let Some(Ok(app_data)) = data() {
+            categories.set(app_data.categories.clone());
+            product_types.set(app_data.product_types.clone());
+            products.set(app_data.products.clone());
+            selected_prod_type_idx.set(0);
+            selected_category_idx.set(0);
+
+            let mut initial_weights = HashMap::new();
+            if let Some(first_type) = app_data.product_types.first() {
+                let combined = get_combined_criteria(first_type, &app_data.categories);
+                for crit in combined {
+                    initial_weights.insert(crit.id, 5.0);
+                }
+            }
+            weights.set(initial_weights);
         }
-        map
     });
 
     // Synchronize weights when mode or tab selections change
@@ -81,61 +93,91 @@ pub fn Compare() -> Element {
         weights.set(new_weights);
     });
 
+    if let Some(Err(_)) = data() {
+        return rsx! { div { class: "max-w-6xl mx-auto px-6 py-20 text-rose-600", "Failed to load product data." } };
+    }
+
+    if categories.read().is_empty() || product_types.read().is_empty() {
+        return rsx! { div { class: "max-w-6xl mx-auto px-6 py-20 text-hb-matrix", "Loading product data..." } };
+    }
+
     // Get active entities and active criteria
-    let (active_name, active_emoji, active_desc, active_criteria, active_presets) = match workspace_mode() {
-        WorkspaceMode::ProductType => {
-            let pt = product_types.read()[selected_prod_type_idx()].clone();
-            let crit = get_combined_criteria(&pt, &categories.read());
-            (pt.name, pt.emoji, pt.description, crit, pt.presets)
-        }
-        WorkspaceMode::Category => {
-            let cat = categories.read()[selected_category_idx()].clone();
-            let crit = cat.criteria.clone();
-            // Generate some dynamic category presets
-            let mut presets = vec![
-                crate::model::WeightProfile {
+    let (active_name, active_emoji, active_desc, active_criteria, active_presets) =
+        match workspace_mode() {
+            WorkspaceMode::ProductType => {
+                let pt = product_types.read()[selected_prod_type_idx()].clone();
+                let crit = get_combined_criteria(&pt, &categories.read());
+                (pt.name, pt.emoji, pt.description, crit, pt.presets)
+            }
+            WorkspaceMode::Category => {
+                let cat = categories.read()[selected_category_idx()].clone();
+                let crit = cat.criteria.clone();
+                // Generate some dynamic category presets
+                let mut presets = vec![crate::model::WeightProfile {
                     name: "Balanced Benchmark".to_string(),
                     weights: crit.iter().map(|c| (c.id.clone(), 5.0)).collect(),
+                }];
+                // Add environment or ethics focused preset depending on criteria
+                if crit.iter().any(|c| {
+                    c.id == "carbon_footprint" || c.id == "e_waste" || c.id == "durability"
+                }) {
+                    presets.push(crate::model::WeightProfile {
+                        name: "Climate First".to_string(),
+                        weights: crit
+                            .iter()
+                            .map(|c| {
+                                let w = if c.id == "carbon_footprint"
+                                    || c.id == "e_waste"
+                                    || c.id == "durability"
+                                {
+                                    10.0
+                                } else {
+                                    2.0
+                                };
+                                (c.id.clone(), w)
+                            })
+                            .collect(),
+                    });
                 }
-            ];
-            // Add environment or ethics focused preset depending on criteria
-            if crit.iter().any(|c| c.id == "carbon_footprint" || c.id == "e_waste" || c.id == "durability") {
-                presets.push(crate::model::WeightProfile {
-                    name: "Climate First".to_string(),
-                    weights: crit.iter().map(|c| {
-                        let w = if c.id == "carbon_footprint" || c.id == "e_waste" || c.id == "durability" { 10.0 } else { 2.0 };
-                        (c.id.clone(), w)
-                    }).collect(),
-                });
+                if crit.iter().any(|c| c.id == "sourcing_ethics") {
+                    presets.push(crate::model::WeightProfile {
+                        name: "Ethics First".to_string(),
+                        weights: crit
+                            .iter()
+                            .map(|c| {
+                                let w = if c.id == "sourcing_ethics" { 10.0 } else { 3.0 };
+                                (c.id.clone(), w)
+                            })
+                            .collect(),
+                    });
+                }
+                (cat.name, cat.emoji, cat.description, crit, presets)
             }
-            if crit.iter().any(|c| c.id == "sourcing_ethics") {
-                presets.push(crate::model::WeightProfile {
-                    name: "Ethics First".to_string(),
-                    weights: crit.iter().map(|c| {
-                        let w = if c.id == "sourcing_ethics" { 10.0 } else { 3.0 };
-                        (c.id.clone(), w)
-                    }).collect(),
-                });
-            }
-            (cat.name, cat.emoji, cat.description, crit, presets)
-        }
-    };
+        };
 
     // Filter and Sort products (Search query suggestions are handled separately below)
     let current_weights = weights();
     let mut sorted_products = match workspace_mode() {
         WorkspaceMode::ProductType => {
             let pt = &product_types.read()[selected_prod_type_idx()];
-            products.read().iter()
+            products
+                .read()
+                .iter()
                 .filter(|p| p.product_type_id == pt.id)
                 .cloned()
                 .collect::<Vec<Product>>()
         }
         WorkspaceMode::Category => {
             let cat = &categories.read()[selected_category_idx()];
-            products.read().iter()
+            products
+                .read()
+                .iter()
                 .filter(|p| {
-                    if let Some(pt) = product_types.read().iter().find(|t| t.id == p.product_type_id) {
+                    if let Some(pt) = product_types
+                        .read()
+                        .iter()
+                        .find(|t| t.id == p.product_type_id)
+                    {
                         pt.category_ids.contains(&cat.id)
                     } else {
                         false
@@ -149,17 +191,21 @@ pub fn Compare() -> Element {
     sorted_products.sort_by(|a, b| {
         let score_a = calculate_score(a, &current_weights);
         let score_b = calculate_score(b, &current_weights);
-        score_b.partial_cmp(&score_a).unwrap_or(std::cmp::Ordering::Equal)
+        score_b
+            .partial_cmp(&score_a)
+            .unwrap_or(std::cmp::Ordering::Equal)
     });
 
     // Compute suggestion query matches
     let query_str = search_query.read().to_lowercase();
     let matched_categories = if !query_str.is_empty() {
-        categories.read().iter()
+        categories
+            .read()
+            .iter()
             .enumerate()
             .filter(|(_, cat)| {
-                cat.name.to_lowercase().contains(&query_str) ||
-                cat.description.to_lowercase().contains(&query_str)
+                cat.name.to_lowercase().contains(&query_str)
+                    || cat.description.to_lowercase().contains(&query_str)
             })
             .map(|(idx, cat)| (idx, cat.clone()))
             .collect::<Vec<(usize, Category)>>()
@@ -168,11 +214,13 @@ pub fn Compare() -> Element {
     };
 
     let matched_product_types = if !query_str.is_empty() {
-        product_types.read().iter()
+        product_types
+            .read()
+            .iter()
             .enumerate()
             .filter(|(_, pt)| {
-                pt.name.to_lowercase().contains(&query_str) ||
-                pt.description.to_lowercase().contains(&query_str)
+                pt.name.to_lowercase().contains(&query_str)
+                    || pt.description.to_lowercase().contains(&query_str)
             })
             .map(|(idx, pt)| (idx, pt.clone()))
             .collect::<Vec<(usize, ProductType)>>()
@@ -195,7 +243,7 @@ pub fn Compare() -> Element {
     rsx! {
         div {
             class: "max-w-6xl mx-auto px-6 py-8",
-            
+
             // Page Header
             div {
                 class: "flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8",
@@ -278,7 +326,7 @@ pub fn Compare() -> Element {
                 // Command Palette Suggestions View
                 div {
                     class: "max-w-3xl mx-auto space-y-6 animate-fade-in-down",
-                    
+
                     div {
                         class: "flex justify-between items-center px-1",
                         h3 { class: "text-xs font-bold text-hb-matrix uppercase tracking-widest font-display", "Search Results" }
@@ -305,7 +353,7 @@ pub fn Compare() -> Element {
                     } else {
                         div {
                             class: "space-y-3",
-                            
+
                             // Render Category Matches
                             for (idx, cat) in matched_categories {
                                 div {
@@ -417,7 +465,7 @@ pub fn Compare() -> Element {
                             div {
                                 class: "flex justify-between items-center border-b border-hb-matrix/10 pb-4",
                                 div {
-                                    h3 { class: "font-bold text-hb-nucleus text-lg font-display flex items-center gap-2", 
+                                    h3 { class: "font-bold text-hb-nucleus text-lg font-display flex items-center gap-2",
                                         span { "📂" }
                                         span { "Create New Category" }
                                     }
@@ -431,11 +479,11 @@ pub fn Compare() -> Element {
                                     "Cancel"
                                 }
                             }
-                            
+
                             // Form fields
                             div {
                                 class: "space-y-4",
-                                
+
                                 div {
                                     class: "grid grid-cols-4 gap-4",
                                     div {
@@ -458,7 +506,7 @@ pub fn Compare() -> Element {
                                         }
                                     }
                                 }
-                                
+
                                 div {
                                     class: "space-y-1.5",
                                     label { class: "text-xs font-bold text-hb-matrix", "Description" }
@@ -469,7 +517,7 @@ pub fn Compare() -> Element {
                                         oninput: move |e| new_description.set(e.value()),
                                     }
                                 }
-                                
+
                                 // Choose from existing criteria
                                 div {
                                     class: "space-y-2",
@@ -493,7 +541,7 @@ pub fn Compare() -> Element {
                                                 list.sort_by(|a, b| a.name.cmp(&b.name));
                                                 list
                                             };
-                                            
+
                                             all_existing_criteria.into_iter().map(|crit| {
                                                 let is_selected = selected_criteria.read().contains(&crit.id);
                                                 let crit_id_clone = crit.id.clone();
@@ -532,7 +580,7 @@ pub fn Compare() -> Element {
                                 div {
                                     class: "space-y-3 border-t border-hb-matrix/10 pt-4",
                                     label { class: "text-xs font-bold text-hb-matrix block", "Add Custom Criteria" }
-                                    
+
                                     // Custom criteria list added so far
                                     if !custom_criteria.read().is_empty() {
                                         div {
@@ -629,7 +677,7 @@ pub fn Compare() -> Element {
                                     }
                                 }
                             }
-                            
+
                             // Save button
                             div {
                                 class: "flex justify-end gap-3 border-t border-hb-matrix/10 pt-4",
@@ -650,7 +698,7 @@ pub fn Compare() -> Element {
                                                 .map(|c| if c == ' ' { '_' } else { c })
                                                 .filter(|c| c.is_alphanumeric() || *c == '_')
                                                 .collect();
-                                            
+
                                             // Gather all criteria selected or custom-created
                                             let mut final_criteria = Vec::new();
                                             let all_existing_criteria = {
@@ -673,7 +721,7 @@ pub fn Compare() -> Element {
                                                 }
                                             }
                                             final_criteria.extend(custom_criteria.read().clone());
-                                            
+
                                             let new_cat = Category {
                                                 id: clean_id,
                                                 name: name_val,
@@ -681,7 +729,7 @@ pub fn Compare() -> Element {
                                                 emoji: new_emoji.read().trim().to_string(),
                                                 criteria: final_criteria,
                                             };
-                                            
+
                                             categories.write().push(new_cat);
                                             let new_idx = categories.read().len() - 1;
                                             workspace_mode.set(WorkspaceMode::Category);
@@ -702,7 +750,7 @@ pub fn Compare() -> Element {
                             div {
                                 class: "flex justify-between items-center border-b border-hb-matrix/10 pb-4",
                                 div {
-                                    h3 { class: "font-bold text-hb-nucleus text-lg font-display flex items-center gap-2", 
+                                    h3 { class: "font-bold text-hb-nucleus text-lg font-display flex items-center gap-2",
                                         span { "📦" }
                                         span { "Create New Product Type" }
                                     }
@@ -716,11 +764,11 @@ pub fn Compare() -> Element {
                                     "Cancel"
                                 }
                             }
-                            
+
                             // Form fields
                             div {
                                 class: "space-y-4",
-                                
+
                                 div {
                                     class: "grid grid-cols-4 gap-4",
                                     div {
@@ -743,7 +791,7 @@ pub fn Compare() -> Element {
                                         }
                                     }
                                 }
-                                
+
                                 div {
                                     class: "space-y-1.5",
                                     label { class: "text-xs font-bold text-hb-matrix", "Description" }
@@ -754,7 +802,7 @@ pub fn Compare() -> Element {
                                         oninput: move |e| new_description.set(e.value()),
                                     }
                                 }
-                                
+
                                 // Choose categories (for inheritance of criteria)
                                 div {
                                     class: "space-y-2",
@@ -819,7 +867,7 @@ pub fn Compare() -> Element {
                                                 list.sort_by(|a, b| a.name.cmp(&b.name));
                                                 list
                                             };
-                                            
+
                                             all_existing_criteria.into_iter().map(|crit| {
                                                 let is_selected = selected_criteria.read().contains(&crit.id);
                                                 let crit_id_clone = crit.id.clone();
@@ -858,7 +906,7 @@ pub fn Compare() -> Element {
                                 div {
                                     class: "space-y-3 border-t border-hb-matrix/10 pt-4",
                                     label { class: "text-xs font-bold text-hb-matrix block", "Add Custom Specific Criteria" }
-                                    
+
                                     // Custom criteria list added so far
                                     if !custom_criteria.read().is_empty() {
                                         div {
@@ -955,7 +1003,7 @@ pub fn Compare() -> Element {
                                     }
                                 }
                             }
-                            
+
                             // Save button
                             div {
                                 class: "flex justify-end gap-3 border-t border-hb-matrix/10 pt-4",
@@ -976,7 +1024,7 @@ pub fn Compare() -> Element {
                                                 .map(|c| if c == ' ' { '_' } else { c })
                                                 .filter(|c| c.is_alphanumeric() || *c == '_')
                                                 .collect();
-                                            
+
                                             // Gather specific criteria: selected or custom-created
                                             let mut final_specific_criteria = Vec::new();
                                             let all_existing_criteria = {
@@ -999,7 +1047,7 @@ pub fn Compare() -> Element {
                                                 }
                                             }
                                             final_specific_criteria.extend(custom_criteria.read().clone());
-                                            
+
                                             // Generate initial weight profile map
                                             let mut weights_map = HashMap::new();
                                             for cat_id in selected_categories.read().iter() {
@@ -1012,12 +1060,12 @@ pub fn Compare() -> Element {
                                             for crit in &final_specific_criteria {
                                                 weights_map.insert(crit.id.clone(), 5.0);
                                             }
-                                            
+
                                             let default_preset = crate::model::WeightProfile {
                                                 name: "Balanced Default".to_string(),
                                                 weights: weights_map,
                                             };
-                                            
+
                                             let new_pt = ProductType {
                                                 id: clean_id,
                                                 name: name_val,
@@ -1027,7 +1075,7 @@ pub fn Compare() -> Element {
                                                 specific_criteria: final_specific_criteria,
                                                 presets: vec![default_preset],
                                             };
-                                            
+
                                             product_types.write().push(new_pt);
                                             let new_idx = product_types.read().len() - 1;
                                             workspace_mode.set(WorkspaceMode::ProductType);
@@ -1103,17 +1151,17 @@ pub fn Compare() -> Element {
                     // Workspace Layout Grid
                     div {
                         class: "grid grid-cols-1 lg:grid-cols-12 gap-8 items-start",
-                        
+
                         // Left Column: Weight Sliders & Presets (5 cols)
                         div {
                             class: "lg:col-span-5 space-y-6 lg:sticky lg:top-24",
-                            
+
                             // Selected entity card (Product Type or Category)
                             div {
                                 class: "bg-hb-cytoplasm border border-hb-matrix/10 p-5 hb-squarcle shadow-sm",
                                 div {
                                     class: "flex justify-between items-start",
-                                    h2 { class: "text-lg font-bold text-hb-nucleus flex items-center gap-2 font-display", 
+                                    h2 { class: "text-lg font-bold text-hb-nucleus flex items-center gap-2 font-display",
                                         span { "{active_emoji}" }
                                         span { "{active_name}" }
                                     }
@@ -1127,7 +1175,7 @@ pub fn Compare() -> Element {
                                 }
                                 p { class: "text-hb-matrix text-xs mt-2.5 leading-relaxed", "{active_desc}" }
                             }
-                            
+
                             // Presets Selection
                             if !active_presets.is_empty() {
                                 div {
@@ -1203,7 +1251,7 @@ pub fn Compare() -> Element {
                     // Right Column: Ranked Results (7 cols)
                     div {
                         class: "lg:col-span-7 space-y-4",
-                        
+
                         div {
                             class: "flex justify-between items-center px-2",
                             h3 { class: "text-xs font-bold text-hb-matrix uppercase tracking-widest font-display", "Analytical Ranking" }

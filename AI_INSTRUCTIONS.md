@@ -27,8 +27,8 @@ Krynon uses **Tailwind CSS v4** for all styles:
 ---
 
 ## 3. Database & Server Functions
-- **MVP (SQLite)**: Integrated via `sqlx` with the `sqlite` driver. Database operations reside inside server functions, executed on the backend target.
-- **Production (PostgreSQL)**: Ensure all SQL queries are generic or standard-compliant. Do not use SQLite-specific syntax that might break when migrating to PostgreSQL.
+- **Production (PostgreSQL)**: Integrated via `sqlx` with the `postgres` driver. Database operations reside inside server functions, executed on the backend target.
+- Ensure all SQL queries are generic or standard-compliant. Do not use SQLite-specific syntax that might break when migrating to PostgreSQL.
 - **Client/Server Isolation**: Place all imports related to database drivers, connection pools, or server crates within `#[cfg(feature = "server")]` blocks or inside server-only functions to prevent compilation failures on the WASM client target.
 
 ---

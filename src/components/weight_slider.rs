@@ -27,7 +27,7 @@ pub fn WeightSlider(
                 }
             }
             p { class: "text-hb-matrix text-xs mt-1 leading-relaxed", "{description}" }
-            
+
             div {
                 class: "flex items-center gap-3 mt-3",
                 span { class: "text-[10px] text-hb-matrix font-medium select-none", "Ignore" }

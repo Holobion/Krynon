@@ -1,5 +1,5 @@
+use crate::model::{calculate_score, Criterion, Product};
 use dioxus::prelude::*;
-use crate::model::{Product, Criterion, calculate_score};
 use std::collections::HashMap;
 
 #[component]
@@ -15,16 +15,33 @@ pub fn ProductCard(
     let overall_score = calculate_score(&product, &weights);
     let rounded_score = (overall_score * 10.0).round() / 10.0;
 
-    let sum_weights: f64 = criteria.iter()
+    let sum_weights: f64 = criteria
+        .iter()
         .map(|c| weights.get(&c.id).copied().unwrap_or(5.0))
         .sum();
 
     // Ranks visual config
     let (card_border, rank_bg, _rank_text_color) = match rank {
-        1 => ("border-amber-200/60", "bg-amber-100 text-amber-700 font-black border border-amber-200/50", "text-amber-700"),
-        2 => ("border-slate-200/60", "bg-slate-100 text-slate-600 font-black border border-slate-200/50", "text-slate-600"),
-        3 => ("border-orange-200/60", "bg-orange-50 text-orange-700 font-bold border border-orange-200/50", "text-orange-700"),
-        _ => ("border-hb-matrix/10 hover:border-hb-matrix/20", "bg-hb-membrane text-hb-matrix border border-hb-matrix/10 font-semibold", "text-hb-matrix"),
+        1 => (
+            "border-amber-200/60",
+            "bg-amber-100 text-amber-700 font-black border border-amber-200/50",
+            "text-amber-700",
+        ),
+        2 => (
+            "border-slate-200/60",
+            "bg-slate-100 text-slate-600 font-black border border-slate-200/50",
+            "text-slate-600",
+        ),
+        3 => (
+            "border-orange-200/60",
+            "bg-orange-50 text-orange-700 font-bold border border-orange-200/50",
+            "text-orange-700",
+        ),
+        _ => (
+            "border-hb-matrix/10 hover:border-hb-matrix/20",
+            "bg-hb-membrane text-hb-matrix border border-hb-matrix/10 font-semibold",
+            "text-hb-matrix",
+        ),
     };
 
     let arrow_class = if is_expanded() { "rotate-180" } else { "" };
@@ -51,7 +68,7 @@ pub fn ProductCard(
                         p { class: "text-hb-matrix text-xs mt-0.5 line-clamp-1", "{product.description}" }
                     }
                 }
-                
+
                 // Score Badge
                 div {
                     class: "flex flex-col items-end",
@@ -114,7 +131,7 @@ pub fn ProductCard(
                     p { class: "text-hb-nucleus/90 text-sm leading-relaxed", "{product.description}" }
 
                     h4 { class: "text-xs font-bold text-hb-matrix uppercase tracking-widest mt-4 font-display", "Detailed Criteria Breakdown" }
-                    
+
                     div {
                         class: "grid grid-cols-1 md:grid-cols-2 gap-4 mt-2",
                         for criterion in &criteria {

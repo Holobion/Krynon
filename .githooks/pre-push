@@ -55,12 +55,25 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     new_patch=$((10#$patch + 1))
     new_version="${major}.${minor}.${new_patch}"
 
-    # Replace the package `version = "..."` line. Dependency versions in
-    # Cargo.toml are inline (e.g. `dioxus = { version = "0.7.1" }`), so the
-    # `^version` anchor naturally restricts the substitution to the package.
+    # Replace the package `version = "..."` line in Cargo.toml. Dependency
+    # versions in Cargo.toml are inline (e.g. `dioxus = { version = "0.7.1" }`),
+    # so the `^version` anchor naturally restricts the substitution to the
+    # package itself.
     sed -i -E "s/^version = \"[^\"]+\"/version = \"${new_version}\"/" Cargo.toml
 
-    # Sanity check: confirm the file actually changed
+    # Update the matching `version = "..."` line in Cargo.lock, but only
+    # inside the `[[package]]` block whose `name = "krynon"` (this package).
+    # Dependency entries are left untouched.
+    awk -v new_version="${new_version}" '
+        /^name = "krynon"$/ { found=1; print; next }
+        found && /^version = / {
+            sub(/"[^"]+"/, "\"" new_version "\"")
+            found=0
+        }
+        { print }
+    ' Cargo.lock > Cargo.lock.tmp && mv Cargo.lock.tmp Cargo.lock
+
+    # Sanity check: confirm Cargo.toml actually changed
     if git diff --quiet -- Cargo.toml; then
         echo "warning: version bump resulted in no change (already at ${new_version}?)" >&2
         continue
@@ -68,7 +81,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
 
     echo "Bumping version: ${current} -> ${new_version}"
 
-    git add Cargo.toml
+    git add Cargo.toml Cargo.lock
     # --no-verify so any pre-commit hook doesn't run (and we don't recurse)
     git commit --no-verify -m "chore(release): bump version to ${new_version}"
 done

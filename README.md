@@ -126,7 +126,7 @@ To release a new version, **just bump `version` in `Cargo.toml` and push to `mai
 
 ### Local Git Hook: Auto-Bump on Push
 
-A [pre-push hook](.githooks/pre-push) is included to keep the version in `Cargo.toml` in sync with your work. When you push to `main` and `Cargo.toml` is part of the pushed commits, the hook automatically bumps the **minor** version (e.g. `0.1.0` → `0.2.0`) and appends a `chore(release): bump version to X.Y.Z` commit before the push goes through.
+A [pre-push hook](.githooks/pre-push) is included to keep the version in `Cargo.toml` in sync with your work. When you push to `main` and `Cargo.toml` is part of the pushed commits, the hook automatically bumps the **patch** version (e.g. `0.1.0` → `0.1.1`) and appends a `chore(release): bump version to X.Y.Z` commit before the push goes through. Both `Cargo.toml` and the corresponding entry in `Cargo.lock` are updated in the same commit, so the lock file never drifts from the manifest.
 
 **Install once per clone:**
 
@@ -144,7 +144,7 @@ git push --no-verify
 
 1. You commit changes to a feature branch and merge to `main`.
 2. You run `git push origin main`.
-3. The pre-push hook detects `Cargo.toml` in the diff, bumps the minor version, and commits the change.
+3. The pre-push hook detects `Cargo.toml` in the diff, bumps the patch version in both `Cargo.toml` and `Cargo.lock`, and commits the change.
 4. The push goes through with the new commit included.
 5. The `Docker` workflow runs, reads the new version from `Cargo.toml`, and publishes the image to GHCR.
 

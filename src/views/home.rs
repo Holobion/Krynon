@@ -13,7 +13,7 @@ fn CriterionLogo() -> Element {
             class: "w-36 h-36 text-kr-text-nucleus",
             fill: "currentColor",
             xmlns: "http://www.w3.org/2000/svg",
-            
+
             // Left cluster (Separated facet A)
             circle { cx: "35", cy: "50", r: "4.5" }
             circle { cx: "30", cy: "45", r: "3.2" }
@@ -24,7 +24,7 @@ fn CriterionLogo() -> Element {
             circle { cx: "45", cy: "50", r: "1.5" }
             circle { cx: "28", cy: "40", r: "1.4" }
             circle { cx: "42", cy: "62", r: "1.3" }
-            
+
             // Right cluster (Separated facet B)
             circle { cx: "65", cy: "50", r: "4.5" }
             circle { cx: "70", cy: "55", r: "3.2" }
@@ -35,7 +35,7 @@ fn CriterionLogo() -> Element {
             circle { cx: "55", cy: "50", r: "1.5" }
             circle { cx: "72", cy: "60", r: "1.4" }
             circle { cx: "58", cy: "38", r: "1.3" }
-            
+
             // Floating scattered dots in between (Separation line parameter space)
             circle { cx: "50", cy: "30", r: "0.8" }
             circle { cx: "50", cy: "70", r: "0.8" }
@@ -53,34 +53,34 @@ fn InheritanceLogo() -> Element {
             class: "w-36 h-36 text-kr-text-nucleus",
             fill: "currentColor",
             xmlns: "http://www.w3.org/2000/svg",
-            
+
             // Root node (top)
             circle { cx: "50", cy: "20", r: "5.0" }
             circle { cx: "47", cy: "17", r: "3.0" }
             circle { cx: "53", cy: "23", r: "2.5" }
-            
+
             // Left branch child
             circle { cx: "30", cy: "50", r: "4.0" }
             circle { cx: "27", cy: "47", r: "2.2" }
             circle { cx: "33", cy: "53", r: "2.0" }
-            
+
             // Right branch child
             circle { cx: "70", cy: "50", r: "4.0" }
             circle { cx: "67", cy: "53", r: "2.2" }
             circle { cx: "73", cy: "47", r: "2.0" }
-            
+
             // Bottom left children
             circle { cx: "15", cy: "75", r: "3.0" }
             circle { cx: "12", cy: "73", r: "1.5" }
             circle { cx: "40", cy: "75", r: "3.0" }
             circle { cx: "43", cy: "77", r: "1.5" }
-            
+
             // Bottom right children
             circle { cx: "60", cy: "75", r: "3.0" }
             circle { cx: "57", cy: "77", r: "1.5" }
             circle { cx: "85", cy: "75", r: "3.0" }
             circle { cx: "88", cy: "73", r: "1.5" }
-            
+
             // Connecting stippled lines
             // Top to Left child
             circle { cx: "45", cy: "28", r: "1.0" }
@@ -118,18 +118,18 @@ fn WeightingLogo() -> Element {
             class: "w-36 h-36 text-kr-text-nucleus",
             fill: "currentColor",
             xmlns: "http://www.w3.org/2000/svg",
-            
+
             // Center fulcrum
             circle { cx: "50", cy: "70", r: "4.0" }
             circle { cx: "47", cy: "73", r: "2.5" }
             circle { cx: "53", cy: "73", r: "2.5" }
-            
+
             // Central pillar
             circle { cx: "50", cy: "60", r: "1.2" }
             circle { cx: "50", cy: "50", r: "1.2" }
             circle { cx: "50", cy: "40", r: "1.2" }
             circle { cx: "50", cy: "30", r: "1.5" }
-            
+
             // Balance beam (tilted slightly for dynamism)
             circle { cx: "50", cy: "30", r: "2.5" }
             circle { cx: "42", cy: "28", r: "1.8" }
@@ -138,7 +138,7 @@ fn WeightingLogo() -> Element {
             circle { cx: "58", cy: "32", r: "1.8" }
             circle { cx: "66", cy: "34", r: "1.8" }
             circle { cx: "74", cy: "36", r: "2.2" }
-            
+
             // Left scale pan (higher up because it's lighter)
             circle { cx: "26", cy: "45", r: "3.5" }
             circle { cx: "22", cy: "43", r: "1.5" }
@@ -146,7 +146,7 @@ fn WeightingLogo() -> Element {
             // Left scale strings
             circle { cx: "26", cy: "31", r: "0.8" }
             circle { cx: "26", cy: "38", r: "0.8" }
-            
+
             // Right scale pan (lower down because it's heavier)
             circle { cx: "74", cy: "65", r: "4.5" }
             circle { cx: "70", cy: "63", r: "2.0" }
@@ -166,14 +166,14 @@ fn ConsensusLogo() -> Element {
             class: "w-36 h-36 text-kr-text-nucleus",
             fill: "currentColor",
             xmlns: "http://www.w3.org/2000/svg",
-            
+
             // Central target/bullseye (high density)
             circle { cx: "50", cy: "50", r: "5.5" }
             circle { cx: "47", cy: "47", r: "3.5" }
             circle { cx: "53", cy: "53", r: "3.5" }
             circle { cx: "53", cy: "47", r: "3.0" }
             circle { cx: "47", cy: "53", r: "3.0" }
-            
+
             // Inner concentric ring
             circle { cx: "50", cy: "35", r: "1.8" }
             circle { cx: "65", cy: "50", r: "1.8" }
@@ -183,30 +183,30 @@ fn ConsensusLogo() -> Element {
             circle { cx: "61", cy: "39", r: "1.2" }
             circle { cx: "61", cy: "61", r: "1.2" }
             circle { cx: "39", cy: "61", r: "1.2" }
-            
+
             // Outer incoming vectors (converging dots)
             circle { cx: "50", cy: "20", r: "1.5" }
             circle { cx: "50", cy: "10", r: "1.0" }
-            
+
             circle { cx: "80", cy: "50", r: "1.5" }
             circle { cx: "90", cy: "50", r: "1.0" }
-            
+
             circle { cx: "50", cy: "80", r: "1.5" }
             circle { cx: "50", cy: "90", r: "1.0" }
-            
+
             circle { cx: "20", cy: "50", r: "1.5" }
             circle { cx: "10", cy: "50", r: "1.0" }
-            
+
             // Diagonal vectors
             circle { cx: "28", cy: "28", r: "1.4" }
             circle { cx: "20", cy: "20", r: "0.9" }
-            
+
             circle { cx: "72", cy: "28", r: "1.4" }
             circle { cx: "80", cy: "20", r: "0.9" }
-            
+
             circle { cx: "72", cy: "72", r: "1.4" }
             circle { cx: "80", cy: "80", r: "0.9" }
-            
+
             circle { cx: "28", cy: "72", r: "1.4" }
             circle { cx: "20", cy: "80", r: "0.9" }
         }
@@ -254,7 +254,7 @@ pub fn Home() -> Element {
                             class: "font-serif italic text-lg md:text-2xl text-kr-text-matrix leading-relaxed max-w-2xl",
                             "{lang().t(\"\\\"Krynon is designed to embody its etymological root—krinein. By separating products into their fundamental components and evaluating them systematically, it empowers users to make objective, data-driven decisions based on their exact priorities.\\\"\")}"
                         }
-                        
+
                         // Metadata detail blocks (archival style)
                         div {
                             class: "grid grid-cols-2 sm:grid-cols-3 gap-6 pt-4 font-mono text-[11px] uppercase tracking-wider text-kr-text-nucleus border-t-1.5 border-kr-text-nucleus/20",
@@ -312,7 +312,7 @@ pub fn Home() -> Element {
                         "ENGINE_MATRIX: V0.7.1"
                     }
                 }
-                
+
                 div {
                     class: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6",
 
@@ -423,7 +423,7 @@ pub fn Home() -> Element {
                         "KRYNON_CORE // REPOS"
                     }
                 }
-                
+
                 div {
                     class: "grid grid-cols-1 md:grid-cols-3 gap-6",
 
@@ -514,7 +514,7 @@ pub fn Home() -> Element {
                 class: "max-w-6xl mx-auto px-6",
                 div {
                     class: "kr-grid-box p-0 overflow-hidden grid grid-cols-1 md:grid-cols-12 items-stretch bg-grid-pattern",
-                    
+
                     // Left bento cell: Title & Info
                     div {
                         class: "md:col-span-8 p-8 md:p-12 space-y-6 flex flex-col justify-center",

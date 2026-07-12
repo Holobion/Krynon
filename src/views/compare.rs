@@ -1,6 +1,10 @@
-use crate::model::{load_app_data, Category, ProductType};
+use crate::model::{
+    create_category, create_product, create_product_type, get_combined_criteria, load_app_data,
+    AppData, Category, NewCategoryInput, NewProductInput, NewProductTypeInput, ProductType,
+};
 use crate::Route;
 use dioxus::prelude::*;
+use std::collections::HashMap;
 
 // ==========================================
 // Compare = Workspace Home (Category Grid)
@@ -10,7 +14,13 @@ use dioxus::prelude::*;
 pub fn Compare() -> Element {
     let lang = use_context::<Signal<crate::i18n::Language>>();
     let mut search_query = use_context::<Signal<String>>();
-    let data = use_resource(move || async move { load_app_data().await });
+    let mut show_create_product_modal = use_signal(|| false);
+    let mut refresh_token = use_signal(|| 0_u64);
+    let refresh_nonce = refresh_token;
+    let data = use_resource(move || async move {
+        let _ = refresh_nonce();
+        load_app_data(lang().as_code().to_string()).await
+    });
 
     let query_str = search_query.read().to_lowercase();
 
@@ -29,13 +39,24 @@ pub fn Compare() -> Element {
                         "{lang().t(\"Classification Workspace // Category Index\")}"
                     }
                 }
-                h1 {
-                    class: "text-3xl font-black text-kr-text-nucleus tracking-tight font-display uppercase",
-                    "{lang().t(\"Workspace\")}"
-                }
-                p {
-                    class: "text-kr-text-matrix text-sm mt-1 font-serif italic",
-                    "{lang().t(\"Select a category to explore product types and begin your comparative analysis.\")}"
+                div {
+                    class: "flex flex-wrap items-end justify-between gap-4",
+                    div {
+                        h1 {
+                            class: "text-3xl font-black text-kr-text-nucleus tracking-tight font-display uppercase",
+                            "{lang().t(\"Workspace\")}"
+                        }
+                        p {
+                            class: "text-kr-text-matrix text-sm mt-1 font-serif italic",
+                            "{lang().t(\"Select a category to explore product types and begin your comparative analysis.\")}"
+                        }
+                    }
+                    button {
+                        style: "background-color: var(--color-kr-turquoise) !important; color: white !important;",
+                        class: "kr-btn-pill px-4 py-2 text-xs transition-all active:scale-95 shadow-sm",
+                        onclick: move |_| show_create_product_modal.set(true),
+                        "{lang().t(\"+ Add Product\")}"
+                    }
                 }
             }
 
@@ -59,7 +80,7 @@ pub fn Compare() -> Element {
                     input {
                         class: "bg-transparent border-none outline-none text-base sm:text-lg w-full text-kr-text-nucleus placeholder-kr-text-matrix/60 font-medium",
                         value: "{search_query}",
-                        placeholder: "{lang().t(\"Search categories or product types...\")  }",
+                        placeholder: "{lang().t(\"Search categories or product types...\")}",
                         oninput: move |e| {
                             search_query.set(e.value());
                         }
@@ -173,18 +194,15 @@ pub fn Compare() -> Element {
                         // Category cards grid
                         div {
                             class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6",
-
                             for cat in filtered_categories.iter() {
                                 {
                                     let cat = cat.clone();
                                     let cat_id = cat.id.clone();
-                                    // Get product types belonging to this category
                                     let cat_pts: Vec<ProductType> = product_types.iter()
                                         .filter(|pt| pt.category_ids.contains(&cat.id))
                                         .cloned()
                                         .collect();
                                     let pt_count = cat_pts.len();
-
                                     rsx! {
                                         CategoryCard {
                                             key: "{cat.id}",
@@ -244,6 +262,17 @@ pub fn Compare() -> Element {
                                         }
                                     }
                                 }
+                            }
+                        }
+
+                        if show_create_product_modal() {
+                            CreateProductModal {
+                                app_data: app_data.clone(),
+                                on_close: move |_| show_create_product_modal.set(false),
+                                on_saved: move |_| {
+                                    show_create_product_modal.set(false);
+                                    refresh_token.set(refresh_token() + 1);
+                                },
                             }
                         }
                     }
@@ -368,6 +397,544 @@ fn CategoryCard(
                 span {
                     class: "font-mono text-[9px] uppercase text-kr-text-matrix/50",
                     "{category.criteria.len()} {lang().t(\"criteria\")}"
+                }
+            }
+        }
+    }
+}
+
+// ==========================================
+// Create Product Modal
+// ==========================================
+
+#[component]
+fn CreateProductModal(
+    app_data: AppData,
+    on_close: EventHandler<()>,
+    on_saved: EventHandler<()>,
+) -> Element {
+    let lang = use_context::<Signal<crate::i18n::Language>>();
+
+    let default_product_type_id = app_data
+        .product_types
+        .first()
+        .map(|pt| pt.id.clone())
+        .unwrap_or_default();
+    let default_category_ids = app_data
+        .product_types
+        .iter()
+        .find(|pt| pt.id == default_product_type_id)
+        .map(|pt| pt.category_ids.clone())
+        .filter(|ids| !ids.is_empty())
+        .or_else(|| app_data.categories.first().map(|cat| vec![cat.id.clone()]))
+        .unwrap_or_default();
+
+    let mut selected_category_ids = use_signal(|| default_category_ids.clone());
+    let mut selected_product_type_id = use_signal(|| default_product_type_id.clone());
+    let mut category_search = use_signal(String::new);
+    let mut product_type_search = use_signal(String::new);
+    let mut create_new_category = use_signal(|| false);
+    let mut create_new_product_type = use_signal(|| false);
+    let mut new_category_name = use_signal(|| "".to_string());
+    let mut new_category_description = use_signal(|| "".to_string());
+    let mut new_category_emoji = use_signal(|| "🧪".to_string());
+    let mut new_product_type_name = use_signal(|| "".to_string());
+    let mut new_product_type_description = use_signal(|| "".to_string());
+    let mut new_product_type_emoji = use_signal(|| "📦".to_string());
+    let mut new_product_name = use_signal(|| "".to_string());
+    let mut new_product_description = use_signal(|| "".to_string());
+    let mut new_product_price = use_signal(|| "".to_string());
+    let mut new_product_quantity = use_signal(|| "".to_string());
+    let mut new_product_unit = use_signal(|| "".to_string());
+    let mut error_message = use_signal(|| Option::<String>::None);
+
+    let close_modal = move |_| on_close.call(());
+
+    let category_query = category_search.read().trim().to_lowercase();
+    let product_type_query = product_type_search.read().trim().to_lowercase();
+
+    let filtered_categories: Vec<Category> = if category_query.is_empty() {
+        app_data.categories.clone()
+    } else {
+        app_data
+            .categories
+            .iter()
+            .filter(|category| {
+                category.name.to_lowercase().contains(&category_query)
+                    || category.description.to_lowercase().contains(&category_query)
+            })
+            .cloned()
+            .collect()
+    };
+
+    let filtered_product_types: Vec<ProductType> = if product_type_query.is_empty() {
+        app_data.product_types.clone()
+    } else {
+        app_data
+            .product_types
+            .iter()
+            .filter(|product_type| {
+                product_type.name.to_lowercase().contains(&product_type_query)
+                    || product_type.description.to_lowercase().contains(&product_type_query)
+            })
+            .cloned()
+            .collect()
+    };
+
+    let selected_product_type = app_data
+        .product_types
+        .iter()
+        .find(|pt| pt.id == selected_product_type_id())
+        .cloned();
+
+    let active_criteria_product_type = if create_new_product_type() {
+        ProductType {
+            id: "__preview__".to_string(),
+            name: new_product_type_name.read().trim().to_string(),
+            description: new_product_type_description.read().trim().to_string(),
+            emoji: new_product_type_emoji.read().clone(),
+            category_ids: selected_category_ids.read().clone(),
+            specific_criteria: Vec::new(),
+            presets: Vec::new(),
+        }
+    } else {
+        selected_product_type.clone().unwrap_or_else(|| ProductType {
+            id: "__preview__".to_string(),
+            name: String::new(),
+            description: String::new(),
+            emoji: "📦".to_string(),
+            category_ids: Vec::new(),
+            specific_criteria: Vec::new(),
+            presets: Vec::new(),
+        })
+    };
+
+    let criteria = get_combined_criteria(&active_criteria_product_type, &app_data.categories);
+
+    rsx! {
+        div {
+            class: "fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-sm p-4 overflow-y-auto",
+            onclick: close_modal,
+            div {
+                class: "relative w-full max-w-5xl mt-8 mb-12 bg-kr-cytoplasm border border-kr-text-nucleus shadow-2xl",
+                onclick: move |e| e.stop_propagation(),
+
+                div {
+                    class: "flex items-center justify-between gap-4 border-b border-kr-text-nucleus/10 px-6 py-4 bg-kr-text-nucleus/5",
+                    div {
+                        h3 { class: "text-base font-bold text-kr-text-nucleus font-display uppercase tracking-wide", "{lang().t(\"Add Product\")}" }
+                        p { class: "text-xs text-kr-text-matrix font-serif italic", "{lang().t(\"Select categories and product type, or create them if needed.\")}" }
+                    }
+                    button {
+                        class: "text-kr-text-matrix hover:text-kr-turquoise transition-colors text-sm px-2 py-1",
+                        onclick: close_modal,
+                        "✕"
+                    }
+                }
+
+                div {
+                    class: "grid grid-cols-1 lg:grid-cols-2 gap-6 p-6",
+
+                    div {
+                        class: "space-y-4",
+
+                        div {
+                            class: "border border-kr-text-nucleus/10 p-4 bg-kr-membrane space-y-3",
+                            h4 { class: "text-xs font-bold uppercase tracking-widest text-kr-text-matrix", "{lang().t(\"Category\")}" }
+
+                            div {
+                                class: "relative flex items-center bg-kr-cytoplasm border border-kr-text-nucleus/10 px-3 py-2 text-kr-text-matrix focus-within:border-kr-turquoise transition-all",
+                                svg {
+                                    class: "w-4 h-4 mr-2 shrink-0 text-kr-text-nucleus",
+                                    fill: "none",
+                                    stroke: "currentColor",
+                                    view_box: "0 0 24 24",
+                                    path {
+                                        stroke_linecap: "round",
+                                        stroke_linejoin: "round",
+                                        stroke_width: "2.5",
+                                        d: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                                    }
+                                }
+                                input {
+                                    class: "bg-transparent border-none outline-none text-sm w-full text-kr-text-nucleus placeholder-kr-text-matrix/60 font-medium",
+                                    placeholder: "{lang().t(\"Search categories...\")}",
+                                    value: "{category_search}",
+                                    oninput: move |e| category_search.set(e.value()),
+                                }
+                            }
+
+                            div {
+                                class: "max-h-56 overflow-y-auto space-y-2 pr-1",
+                                for category in filtered_categories.iter() {
+                                    {
+                                        let category = category.clone();
+                                        let category_id = category.id.clone();
+                                        let checked = selected_category_ids.read().contains(&category.id);
+                                        rsx! {
+                                            label {
+                                                key: "{category.id}",
+                                                class: "flex items-center gap-3 text-sm text-kr-text-nucleus cursor-pointer px-3 py-2 border border-kr-text-nucleus/10 hover:border-kr-turquoise/50 transition-colors",
+                                                input {
+                                                    r#type: "checkbox",
+                                                    checked: checked,
+                                                    onchange: move |_| {
+                                                        let mut next = selected_category_ids.read().clone();
+                                                        if next.contains(&category_id) {
+                                                            next.retain(|id| id != &category_id);
+                                                        } else {
+                                                            next.push(category_id.clone());
+                                                        }
+                                                        selected_category_ids.set(next);
+                                                    },
+                                                }
+                                                span { class: "text-lg", "{category.emoji}" }
+                                                div {
+                                                    class: "min-w-0",
+                                                    span { class: "block font-medium", "{lang().tr(&category.name)}" }
+                                                    p { class: "text-[11px] text-kr-text-matrix font-serif italic line-clamp-1", "{lang().tr(&category.description)}" }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            if filtered_categories.is_empty() && !category_query.is_empty() {
+                                div {
+                                    class: "border-t border-kr-text-nucleus/10 pt-3 space-y-2",
+                                    p { class: "text-xs text-kr-text-matrix font-serif italic", "{lang().t(\"No categories found\")}" }
+                                    button {
+                                        class: "kr-btn-pill px-4 py-2 text-xs transition-all active:scale-95 bg-kr-turquoise text-white",
+                                        onclick: move |_| {
+                                            create_new_category.set(true);
+                                            new_category_name.set(category_search.read().trim().to_string());
+                                        },
+                                        "{lang().t(\"Create Category\")}"
+                                    }
+                                }
+                            }
+
+                            if create_new_category() {
+                                div {
+                                    class: "grid grid-cols-1 gap-3 border-t border-kr-text-nucleus/10 pt-3",
+                                    input {
+                                        class: "bg-kr-cytoplasm border border-kr-text-nucleus/10 px-3 py-2 text-sm text-kr-text-nucleus focus:outline-none focus:border-kr-turquoise",
+                                        placeholder: "{lang().t(\"Category Name\")}",
+                                        value: "{new_category_name}",
+                                        oninput: move |e| new_category_name.set(e.value()),
+                                    }
+                                    input {
+                                        class: "bg-kr-cytoplasm border border-kr-text-nucleus/10 px-3 py-2 text-sm text-kr-text-nucleus focus:outline-none focus:border-kr-turquoise",
+                                        placeholder: "{lang().t(\"Emoji\")}",
+                                        value: "{new_category_emoji}",
+                                        oninput: move |e| new_category_emoji.set(e.value()),
+                                    }
+                                    textarea {
+                                        class: "bg-kr-cytoplasm border border-kr-text-nucleus/10 px-3 py-2 text-sm text-kr-text-nucleus focus:outline-none focus:border-kr-turquoise min-h-24",
+                                        placeholder: "{lang().t(\"Explain what this category evaluates...\")}",
+                                        value: "{new_category_description}",
+                                        oninput: move |e| new_category_description.set(e.value()),
+                                    }
+                                }
+                            }
+                        }
+
+                        div {
+                            class: "border border-kr-text-nucleus/10 p-4 bg-kr-membrane space-y-3",
+                            h4 { class: "text-xs font-bold uppercase tracking-widest text-kr-text-matrix", "{lang().t(\"Product Type\")}" }
+
+                            div {
+                                class: "relative flex items-center bg-kr-cytoplasm border border-kr-text-nucleus/10 px-3 py-2 text-kr-text-matrix focus-within:border-kr-turquoise transition-all",
+                                svg {
+                                    class: "w-4 h-4 mr-2 shrink-0 text-kr-text-nucleus",
+                                    fill: "none",
+                                    stroke: "currentColor",
+                                    view_box: "0 0 24 24",
+                                    path {
+                                        stroke_linecap: "round",
+                                        stroke_linejoin: "round",
+                                        stroke_width: "2.5",
+                                        d: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                                    }
+                                }
+                                input {
+                                    class: "bg-transparent border-none outline-none text-sm w-full text-kr-text-nucleus placeholder-kr-text-matrix/60 font-medium",
+                                    placeholder: "{lang().t(\"Search product types...\")}",
+                                    value: "{product_type_search}",
+                                    oninput: move |e| product_type_search.set(e.value()),
+                                }
+                            }
+
+                            div {
+                                class: "max-h-56 overflow-y-auto space-y-2 pr-1",
+                                for product_type in filtered_product_types.iter() {
+                                    {
+                                        let product_type = product_type.clone();
+                                        let product_type_id = product_type.id.clone();
+                                        let active = selected_product_type_id.read().as_str() == product_type_id;
+                                        rsx! {
+                                            label {
+                                                key: "{product_type.id}",
+                                                class: "flex items-center gap-3 text-sm text-kr-text-nucleus cursor-pointer px-3 py-2 border border-kr-text-nucleus/10 hover:border-kr-turquoise/50 transition-colors",
+                                                input {
+                                                    r#type: "radio",
+                                                    name: "product_type_choice",
+                                                    checked: active,
+                                                    onchange: move |_| {
+                                                        selected_product_type_id.set(product_type_id.clone());
+                                                        create_new_product_type.set(false);
+                                                    },
+                                                }
+                                                span { class: "text-lg", "{product_type.emoji}" }
+                                                div {
+                                                    class: "min-w-0",
+                                                    span { class: "block font-medium", "{lang().tr(&product_type.name)}" }
+                                                    p { class: "text-[11px] text-kr-text-matrix font-serif italic line-clamp-1", "{lang().tr(&product_type.description)}" }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            if filtered_product_types.is_empty() && !product_type_query.is_empty() {
+                                div {
+                                    class: "border-t border-kr-text-nucleus/10 pt-3 space-y-2",
+                                    p { class: "text-xs text-kr-text-matrix font-serif italic", "{lang().t(\"No product types found\")}" }
+                                    button {
+                                        class: "kr-btn-pill px-4 py-2 text-xs transition-all active:scale-95 bg-kr-turquoise text-white",
+                                        onclick: move |_| {
+                                            create_new_product_type.set(true);
+                                            new_product_type_name.set(product_type_search.read().trim().to_string());
+                                        },
+                                        "{lang().t(\"Create Product Type\")}"
+                                    }
+                                }
+                            }
+
+                            if create_new_product_type() {
+                                div {
+                                    class: "grid grid-cols-1 gap-3 border-t border-kr-text-nucleus/10 pt-3",
+                                    input {
+                                        class: "bg-kr-cytoplasm border border-kr-text-nucleus/10 px-3 py-2 text-sm text-kr-text-nucleus focus:outline-none focus:border-kr-turquoise",
+                                        placeholder: "{lang().t(\"Product Type Name\")}",
+                                        value: "{new_product_type_name}",
+                                        oninput: move |e| new_product_type_name.set(e.value()),
+                                    }
+                                    input {
+                                        class: "bg-kr-cytoplasm border border-kr-text-nucleus/10 px-3 py-2 text-sm text-kr-text-nucleus focus:outline-none focus:border-kr-turquoise",
+                                        placeholder: "{lang().t(\"Emoji\")}",
+                                        value: "{new_product_type_emoji}",
+                                        oninput: move |e| new_product_type_emoji.set(e.value()),
+                                    }
+                                    textarea {
+                                        class: "bg-kr-cytoplasm border border-kr-text-nucleus/10 px-3 py-2 text-sm text-kr-text-nucleus focus:outline-none focus:border-kr-turquoise min-h-24",
+                                        placeholder: "{lang().t(\"Define a new evaluation category.\")}",
+                                        value: "{new_product_type_description}",
+                                        oninput: move |e| new_product_type_description.set(e.value()),
+                                    }
+                                }
+                            }
+
+                            div {
+                                class: "text-[11px] text-kr-text-matrix font-serif italic leading-relaxed",
+                                "{criteria.len()} {lang().t(\"criteria\")}"
+                            }
+                        }
+                    }
+
+                    div {
+                        class: "space-y-4",
+                        div {
+                            class: "border border-kr-text-nucleus/10 p-4 bg-kr-membrane space-y-3",
+                            h4 { class: "text-xs font-bold uppercase tracking-widest text-kr-text-matrix", "{lang().t(\"Product\")}" }
+                            input {
+                                class: "w-full bg-kr-cytoplasm border border-kr-text-nucleus/10 px-3 py-2 text-sm text-kr-text-nucleus focus:outline-none focus:border-kr-turquoise",
+                                placeholder: "{lang().t(\"Product Name\")}",
+                                value: "{new_product_name}",
+                                oninput: move |e| new_product_name.set(e.value()),
+                            }
+                            input {
+                                class: "w-full bg-kr-cytoplasm border border-kr-text-nucleus/10 px-3 py-2 text-sm text-kr-text-nucleus focus:outline-none focus:border-kr-turquoise",
+                                placeholder: "{lang().t(\"Price ($)\")}",
+                                r#type: "number",
+                                step: "0.01",
+                                min: "0",
+                                value: "{new_product_price}",
+                                oninput: move |e| new_product_price.set(e.value()),
+                            }
+                            div {
+                                class: "grid grid-cols-1 md:grid-cols-2 gap-3",
+                                input {
+                                    class: "bg-kr-cytoplasm border border-kr-text-nucleus/10 px-3 py-2 text-sm text-kr-text-nucleus focus:outline-none focus:border-kr-turquoise",
+                                    placeholder: "{lang().t(\"Quantity (optional)\")}",
+                                    r#type: "number",
+                                    step: "0.01",
+                                    min: "0",
+                                    value: "{new_product_quantity}",
+                                    oninput: move |e| new_product_quantity.set(e.value()),
+                                }
+                                input {
+                                    class: "bg-kr-cytoplasm border border-kr-text-nucleus/10 px-3 py-2 text-sm text-kr-text-nucleus focus:outline-none focus:border-kr-turquoise",
+                                    placeholder: "{lang().t(\"Unit (e.g. kg, L)\")}",
+                                    value: "{new_product_unit}",
+                                    oninput: move |e| new_product_unit.set(e.value()),
+                                }
+                            }
+                            textarea {
+                                class: "w-full bg-kr-cytoplasm border border-kr-text-nucleus/10 px-3 py-2 text-sm text-kr-text-nucleus focus:outline-none focus:border-kr-turquoise min-h-28",
+                                placeholder: "{lang().t(\"Product Description\")}",
+                                value: "{new_product_description}",
+                                oninput: move |e| new_product_description.set(e.value()),
+                            }
+                        }
+
+                        if let Some(error) = error_message.read().as_ref() {
+                            div {
+                                class: "border border-rose-400/40 bg-rose-500/10 text-rose-700 px-4 py-3 text-sm",
+                                "{error}"
+                            }
+                        }
+
+                        div {
+                            class: "flex justify-end gap-3 pt-2",
+                            button {
+                                class: "kr-btn-pill px-4 py-2 text-xs transition-all active:scale-95",
+                                onclick: close_modal,
+                                "{lang().t(\"Cancel\")}"
+                            }
+                            button {
+                                style: "background-color: var(--color-kr-turquoise) !important; color: white !important;",
+                                class: "kr-btn-pill px-5 py-2 text-xs transition-all active:scale-95",
+                                onclick: move |_| {
+                                    let categories = app_data.categories.clone();
+                                    let product_types = app_data.product_types.clone();
+                                    async move {
+                                        error_message.set(None);
+
+                                        let mut final_category_ids = selected_category_ids.read().clone();
+
+                                        if create_new_category() {
+                                            let category_name = new_category_name.read().trim().to_string();
+                                            if category_name.is_empty() {
+                                                error_message.set(Some(lang().t("Category Name").to_string()));
+                                                return;
+                                            }
+
+                                            let created_category = match create_category(NewCategoryInput {
+                                                name: category_name,
+                                                description: new_category_description.read().trim().to_string(),
+                                                emoji: new_category_emoji.read().trim().to_string(),
+                                            }).await {
+                                                Ok(category) => category,
+                                                Err(err) => {
+                                                    error_message.set(Some(err.to_string()));
+                                                    return;
+                                                }
+                                            };
+                                            final_category_ids.push(created_category.id);
+                                        }
+
+                                        let product_type_id = if create_new_product_type() {
+                                            let product_type_name = new_product_type_name.read().trim().to_string();
+                                            if product_type_name.is_empty() {
+                                                error_message.set(Some(lang().t("Product Type Name").to_string()));
+                                                return;
+                                            }
+
+                                            if final_category_ids.is_empty() {
+                                                error_message.set(Some(lang().t("Select at least one category.").to_string()));
+                                                return;
+                                            }
+
+                                            match create_product_type(NewProductTypeInput {
+                                                name: product_type_name,
+                                                description: new_product_type_description.read().trim().to_string(),
+                                                emoji: new_product_type_emoji.read().trim().to_string(),
+                                                category_ids: final_category_ids.clone(),
+                                            }).await {
+                                                Ok(product_type) => product_type.id,
+                                                Err(err) => {
+                                                    error_message.set(Some(err.to_string()));
+                                                    return;
+                                                }
+                                            }
+                                        } else {
+                                            let id = selected_product_type_id.read().clone();
+                                            if id.is_empty() {
+                                                error_message.set(Some(lang().t("Select Product Type").to_string()));
+                                                return;
+                                            }
+                                            id
+                                        };
+
+                                        let criteria_source = if create_new_product_type() {
+                                            ProductType {
+                                                id: "__preview__".to_string(),
+                                                name: new_product_type_name.read().trim().to_string(),
+                                                description: new_product_type_description.read().trim().to_string(),
+                                                emoji: new_product_type_emoji.read().clone(),
+                                                category_ids: final_category_ids.clone(),
+                                                specific_criteria: Vec::new(),
+                                                presets: Vec::new(),
+                                            }
+                                        } else {
+                                            match product_types.iter().find(|pt| pt.id == product_type_id) {
+                                                Some(pt) => pt.clone(),
+                                                None => {
+                                                    error_message.set(Some(lang().t("Select Product Type").to_string()));
+                                                    return;
+                                                }
+                                            }
+                                        };
+
+                                        let criteria = get_combined_criteria(&criteria_source, &categories);
+                                        let mut scores = HashMap::new();
+                                        for criterion in &criteria {
+                                            scores.insert(criterion.id.clone(), 5.0);
+                                        }
+
+                                        let price = new_product_price.read().trim().parse::<f64>().unwrap_or(0.0);
+                                        let quantity = {
+                                            let qty = new_product_quantity.read().trim().to_string();
+                                            if qty.is_empty() {
+                                                None
+                                            } else {
+                                                qty.parse::<f64>().ok()
+                                            }
+                                        };
+                                        let unit = {
+                                            let unit = new_product_unit.read().trim().to_string();
+                                            if unit.is_empty() { None } else { Some(unit) }
+                                        };
+
+                                        let product_name = new_product_name.read().trim().to_string();
+                                        if product_name.is_empty() {
+                                            error_message.set(Some(lang().t("Product Name").to_string()));
+                                            return;
+                                        }
+
+                                        let product_description = new_product_description.read().trim().to_string();
+
+                                        match create_product(NewProductInput {
+                                            product_type_id,
+                                            name: product_name,
+                                            description: product_description,
+                                            price,
+                                            quantity,
+                                            unit,
+                                            scores,
+                                        }).await {
+                                            Ok(_) => on_saved.call(()),
+                                            Err(err) => error_message.set(Some(err.to_string())),
+                                        }
+                                    }
+                                },
+                                "{lang().t(\"Save Product\")}"
+                            }
+                        }
+                    }
                 }
             }
         }

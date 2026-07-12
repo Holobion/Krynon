@@ -13,6 +13,15 @@ impl Default for Language {
 }
 
 impl Language {
+    pub fn as_code(self) -> &'static str {
+        match self {
+            Language::English => "en",
+            Language::French => "fr",
+        }
+    }
+}
+
+impl Language {
     pub fn t(self, key: &'static str) -> &'static str {
         match self {
             Language::English => translate_en(key),
@@ -266,11 +275,13 @@ fn translate_fr(key: &'static str) -> &'static str {
         "Compare by Product Type" => "Comparer par type de produit",
         "Compare by Category" => "Comparer par catégorie",
         "Search product types or categories (e.g. coffee, technology)..." => "Rechercher des types de produits ou catégories (ex. café, technologie)...",
+        "Search product types in this category..." => "Rechercher des types de produits dans cette catégorie...",
         "Search Results" => "Résultats de recherche",
         "results found" => "résultats trouvés",
         "No matches found" => "Aucun résultat trouvé",
         "We couldn't find any category or product type matching \"{search_query}\". Try searching for 'coffee', 'rice', 'tech', or 'office'." =>
             "Nous n'avons trouvé aucune catégorie ou type de produit correspondant à « {search_query} ». Essayez de rechercher 'café', 'riz', 'tech' ou 'office'.",
+        "No product types match your search." => "Aucun type de produit ne correspond à votre recherche.",
         "Clear Search" => "Effacer la recherche",
         "Category Benchmark" => "Référence de catégorie",
         "Product Type Workspace" => "Espace type de produit",
@@ -283,6 +294,14 @@ fn translate_fr(key: &'static str) -> &'static str {
         "Create Product Type" => "Créer un type de produit",
         "Create New Category" => "Créer une nouvelle catégorie",
         "Define a new evaluation category." => "Définir une nouvelle catégorie d'évaluation.",
+        "Select categories and product type, or create them if needed." =>
+            "Sélectionnez des catégories et un type de produit, ou créez-les si nécessaire.",
+        "Category" => "Catégorie",
+        "Product" => "Produit",
+        "Search categories..." => "Rechercher des catégories...",
+        "Search product types..." => "Rechercher des types de produit...",
+        "No categories found" => "Aucune catégorie trouvée",
+        "No product types found" => "Aucun type de produit trouvé",
         "Cancel" => "Annuler",
         "Emoji" => "Émoticône",
         "Category Name" => "Nom de la catégorie",
@@ -302,6 +321,8 @@ fn translate_fr(key: &'static str) -> &'static str {
         "Product Type Name" => "Nom du type de produit",
         "Inherit from Categories" => "Hériter des catégories",
         "Save Product Type" => "Enregistrer le type de produit",
+        "Select Product Type" => "Sélectionnez un type de produit",
+        "Select at least one category." => "Sélectionnez au moins une catégorie.",
         "Weight Presets" => "Préréglages de coefficients",
         "Reset Weights" => "Réinitialiser",
         "Ranking Analysis" => "Analyse du classement",

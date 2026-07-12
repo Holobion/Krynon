@@ -9,7 +9,8 @@ use dioxus::prelude::*;
 #[component]
 pub fn CategoryPage(id: String) -> Element {
     let lang = use_context::<Signal<crate::i18n::Language>>();
-    let data = use_resource(move || async move { load_app_data().await });
+    let mut search_query = use_context::<Signal<String>>();
+    let data = use_resource(move || async move { load_app_data(lang().as_code().to_string()).await });
     let cat_id = id.clone();
 
     rsx! {
@@ -36,6 +37,7 @@ pub fn CategoryPage(id: String) -> Element {
                     let categories = app_data.categories.clone();
                     let product_types = app_data.product_types.clone();
                     let products = app_data.products.clone();
+                    let query_str = search_query.read().to_lowercase();
 
                     let maybe_cat = categories.iter().find(|c| c.id == cat_id).cloned();
 
@@ -57,6 +59,18 @@ pub fn CategoryPage(id: String) -> Element {
                                 .filter(|pt| pt.category_ids.contains(&cat.id))
                                 .cloned()
                                 .collect();
+                            let filtered_cat_pts: Vec<ProductType> = if query_str.is_empty() {
+                                cat_pts.clone()
+                            } else {
+                                cat_pts.iter()
+                                    .filter(|pt| {
+                                        pt.name.to_lowercase().contains(&query_str)
+                                            || pt.description.to_lowercase().contains(&query_str)
+                                    })
+                                    .cloned()
+                                    .collect()
+                            };
+                            let search_active = !query_str.is_empty();
 
                             rsx! {
                                 // Breadcrumb
@@ -109,6 +123,54 @@ pub fn CategoryPage(id: String) -> Element {
                                             span { class: "font-bold text-kr-turquoise", "{cat_pts.len()}" }
                                         }
                                     }
+
+                                    // Search bar
+                                    div {
+                                        class: "mt-6",
+                                        div {
+                                            class: "relative flex items-center bg-kr-cytoplasm border border-kr-text-nucleus focus-within:border-kr-turquoise px-5 py-4 bg-grid-pattern transition-all",
+                                            svg {
+                                                class: "w-6 h-6 mr-4 shrink-0 text-kr-text-nucleus",
+                                                fill: "none",
+                                                stroke: "currentColor",
+                                                view_box: "0 0 24 24",
+                                                path {
+                                                    stroke_linecap: "round",
+                                                    stroke_linejoin: "round",
+                                                    stroke_width: "2.5",
+                                                    d: "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                                                }
+                                            }
+                                            input {
+                                                class: "bg-transparent border-none outline-none text-base sm:text-lg w-full text-kr-text-nucleus placeholder-kr-text-matrix/60 font-medium",
+                                                value: "{search_query}",
+                                                placeholder: "{lang().t(\"Search product types in this category...\")}",
+                                                oninput: move |e| {
+                                                    search_query.set(e.value());
+                                                }
+                                            }
+                                            if !search_query.read().is_empty() {
+                                                button {
+                                                    class: "hover:text-kr-turquoise text-kr-text-matrix transition-colors p-1",
+                                                    onclick: move |_| {
+                                                        search_query.set("".to_string());
+                                                    },
+                                                    svg {
+                                                        class: "w-5 h-5",
+                                                        fill: "none",
+                                                        stroke: "currentColor",
+                                                        view_box: "0 0 24 24",
+                                                        path {
+                                                            stroke_linecap: "round",
+                                                            stroke_linejoin: "round",
+                                                            stroke_width: "2.5",
+                                                            d: "M6 18L18 6M6 6l12 12"
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
 
                                 // Section: Product Types grid
@@ -116,11 +178,15 @@ pub fn CategoryPage(id: String) -> Element {
                                     class: "flex justify-between items-end mb-6",
                                     h2 {
                                         class: "text-lg font-bold tracking-widest uppercase font-display",
-                                        "{lang().t(\"Product Types\")}"
+                                        if search_active {
+                                            "{lang().t(\"Search Results\")}" 
+                                        } else {
+                                            "{lang().t(\"Product Types\")}" 
+                                        }
                                     }
                                     span {
                                         class: "font-mono text-xs text-kr-text-matrix hidden sm:inline",
-                                        "{cat_pts.len()} {lang().t(\"types\")}"
+                                        "{filtered_cat_pts.len()} {lang().t(\"types\")}" 
                                     }
                                 }
 
@@ -133,10 +199,31 @@ pub fn CategoryPage(id: String) -> Element {
                                             "{lang().t(\"No product types in this category yet.\")}"
                                         }
                                     }
+                                } else if search_active && filtered_cat_pts.is_empty() {
+                                    div {
+                                        class: "py-16 text-center space-y-3",
+                                        span { class: "text-3xl", "🔍" }
+                                        h3 {
+                                            class: "text-lg font-bold text-kr-text-nucleus font-display",
+                                            "{lang().t(\"No matches found\")}" 
+                                        }
+                                        p {
+                                            class: "text-kr-text-matrix font-serif italic text-sm max-w-sm mx-auto",
+                                            "{lang().t(\"No product types match your search.\")}" 
+                                        }
+                                        button {
+                                            style: "background-color: var(--color-kr-turquoise) !important; color: white !important;",
+                                            class: "kr-btn-pill px-5 py-2 text-xs transition-all active:scale-95 mt-2",
+                                            onclick: move |_| {
+                                                search_query.set("".to_string());
+                                            },
+                                            "{lang().t(\"Clear Search\")}" 
+                                        }
+                                    }
                                 } else {
                                     div {
                                         class: "space-y-6",
-                                        for pt in cat_pts.iter() {
+                                        for pt in filtered_cat_pts.iter() {
                                             {
                                                 let pt = pt.clone();
                                                 let pt_id = pt.id.clone();

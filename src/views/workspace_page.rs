@@ -1,7 +1,7 @@
 use crate::components::{ProductCard, WeightSlider};
 use crate::model::{
-    calculate_score, get_combined_criteria, load_app_data, Category, Criterion, Product,
-    ProductType,
+    calculate_score, create_product, get_combined_criteria, load_app_data, Category,
+    NewProductInput, Product, ProductType,
 };
 use crate::Route;
 use dioxus::prelude::*;
@@ -11,7 +11,7 @@ use std::collections::HashMap;
 pub fn WorkspacePage(id: String) -> Element {
     let lang = use_context::<Signal<crate::i18n::Language>>();
     let mut search_query = use_context::<Signal<String>>();
-    let data = use_resource(move || async move { load_app_data().await });
+    let data = use_resource(move || async move { load_app_data(lang().as_code().to_string()).await });
     let pt_id = id.clone();
 
     let mut categories = use_signal(Vec::<Category>::new);
@@ -25,6 +25,8 @@ pub fn WorkspacePage(id: String) -> Element {
     let mut new_product_unit = use_signal(|| "".to_string());
     let mut new_product_description = use_signal(|| "".to_string());
     let mut new_product_scores = use_signal(HashMap::<String, f64>::new);
+    let mut is_saving_product = use_signal(|| false);
+    let mut add_product_error = use_signal(|| None::<String>);
 
     let pt_id_effect = pt_id.clone();
     use_effect(move || {
@@ -68,6 +70,7 @@ pub fn WorkspacePage(id: String) -> Element {
 
     let current_weights = weights();
     let query_str = search_query.read().to_lowercase();
+    let save_error = add_product_error.read().clone();
 
     let mut sorted_products: Vec<Product> = products.read().iter()
         .filter(|p| p.product_type_id == pt.id)
@@ -382,16 +385,16 @@ pub fn WorkspacePage(id: String) -> Element {
                                     "{lang().t(\"Cancel\")}"
                                 }
                                 button {
+                                    disabled: is_saving_product(),
                                     style: "background-color: var(--color-kr-turquoise) !important; color: white !important;",
                                     class: "kr-btn-pill px-5 py-1.5 text-xs transition-all active:scale-95",
                                     onclick: move |_| {
+                                        if is_saving_product() {
+                                            return;
+                                        }
+
                                         let name_val = new_product_name.read().trim().to_string();
                                         if !name_val.is_empty() {
-                                            let clean_id = name_val.to_lowercase()
-                                                .chars()
-                                                .map(|c| if c == ' ' { '-' } else { c })
-                                                .filter(|c| c.is_alphanumeric() || *c == '-')
-                                                .collect::<String>();
                                             let price_val = new_product_price.read().parse::<f64>().unwrap_or(0.0);
                                             let qty_val = new_product_quantity.read().parse::<f64>().ok();
                                             let unit_val = { let u = new_product_unit.read(); if u.is_empty() { None } else { Some(u.clone()) } };
@@ -400,28 +403,56 @@ pub fn WorkspacePage(id: String) -> Element {
                                                 let score = new_product_scores.read().get(&crit.id).copied().unwrap_or(5.0);
                                                 final_scores.insert(crit.id.clone(), score);
                                             }
-                                            let new_prod = Product {
-                                                id: clean_id,
+
+                                            let payload = NewProductInput {
+                                                product_type_id: pt.id.clone(),
                                                 name: name_val,
                                                 description: new_product_description.read().trim().to_string(),
                                                 price: price_val,
                                                 quantity: qty_val,
                                                 unit: unit_val,
-                                                product_type_id: pt.id.clone(),
                                                 scores: final_scores,
                                             };
-                                            products.write().push(new_prod);
-                                            new_product_name.set("".to_string());
-                                            new_product_price.set("".to_string());
-                                            new_product_quantity.set("".to_string());
-                                            new_product_unit.set("".to_string());
-                                            new_product_description.set("".to_string());
-                                            new_product_scores.write().clear();
-                                            show_add_product_form.set(false);
+
+                                            is_saving_product.set(true);
+                                            add_product_error.set(None);
+
+                                            let mut products = products;
+                                            let mut new_product_name = new_product_name;
+                                            let mut new_product_price = new_product_price;
+                                            let mut new_product_quantity = new_product_quantity;
+                                            let mut new_product_unit = new_product_unit;
+                                            let mut new_product_description = new_product_description;
+                                            let mut new_product_scores = new_product_scores;
+                                            let mut show_add_product_form = show_add_product_form;
+                                            let mut is_saving_product = is_saving_product;
+                                            let mut add_product_error = add_product_error;
+
+                                            spawn(async move {
+                                                match create_product(payload).await {
+                                                    Ok(new_prod) => {
+                                                        products.write().push(new_prod);
+                                                        new_product_name.set(String::new());
+                                                        new_product_price.set(String::new());
+                                                        new_product_quantity.set(String::new());
+                                                        new_product_unit.set(String::new());
+                                                        new_product_description.set(String::new());
+                                                        new_product_scores.write().clear();
+                                                        show_add_product_form.set(false);
+                                                    }
+                                                    Err(err) => {
+                                                        add_product_error.set(Some(err.to_string()));
+                                                    }
+                                                }
+                                                is_saving_product.set(false);
+                                            });
                                         }
                                     },
-                                    "{lang().t(\"Save Product\")}"
+                                    if is_saving_product() { "{lang().t(\"Saving...\")}" } else { "{lang().t(\"Save Product\")}" }
                                 }
+                            }
+                            if let Some(error) = save_error {
+                                p { class: "text-rose-600 text-xs font-medium", "{error}" }
                             }
                         }
                     }

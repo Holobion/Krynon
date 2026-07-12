@@ -14,7 +14,7 @@ pub fn About() -> Element {
                 class: "space-y-4",
                 div {
                     class: "inline-flex items-center gap-2 px-3 py-1 rounded-none bg-kr-turquoise/15 border border-kr-turquoise/40 text-kr-nucleus text-xs font-bold uppercase tracking-wider",
-                    span { "🧬 {lang().t(\"Origin Story\")}" }
+                    span { "{lang().t(\"Origin Story\")}" }
                 }
                 h1 { class: "text-4xl font-black text-kr-nucleus tracking-tight sm:text-5xl font-display", "{lang().t(\"The Philosophy of Krinein\")}" }
                 p {

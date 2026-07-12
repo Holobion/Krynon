@@ -48,9 +48,92 @@ fn App() -> Element {
     use_context_provider(|| search_query);
 
     // UI language selection (used for static UI labels and the active locale
-    // when resolving translation maps).
-    let language = use_signal(|| i18n::Language::English);
+    // when resolving translation maps). The choice is persisted in a
+    // `krynon.lang` cookie (so the next SSR renders the right language with
+    // no English flash) and on the client in localStorage (so subsequent
+    // client-side renders are immediate).
+    #[allow(unused_mut)]
+    let mut language = use_signal(|| {
+        // On the client, synchronously read the saved language from
+        // localStorage. The `use_signal` initializer runs on the client
+        // *before* the first render, so the very first paint already shows
+        // the user's preferred language. On the server (SSR) it falls back
+        // to English; the SSR'd HTML is then upgraded by the cookie as soon
+        // as the server function below resolves.
+        #[cfg(target_family = "wasm")]
+        {
+            if let Some(window) = web_sys::window() {
+                if let Ok(Some(stored)) = window
+                    .local_storage()
+                    .map(|s| s.and_then(|s| s.get_item("krynon.language").ok().flatten()))
+                {
+                    if stored == "fr" {
+                        return i18n::Language::French;
+                    }
+                    if stored == "en" {
+                        return i18n::Language::English;
+                    }
+                }
+            }
+        }
+        i18n::Language::English
+    });
+
     use_context_provider(|| language);
+
+    // Whenever the language changes, persist it both to localStorage and to
+    // the `krynon.lang` cookie (so the next SSR sees it).
+    #[cfg(target_family = "wasm")]
+    {
+        use wasm_bindgen::JsCast;
+
+        use_effect(move || {
+            let code = language().as_code().to_string();
+            if let Some(window) = web_sys::window() {
+                if let Ok(Some(storage)) = window.local_storage() {
+                    let _ = storage.set_item("krynon.language", &code);
+                }
+                // The cookie() / set_cookie() methods live on `HtmlDocument`,
+                // not on the generic `Document` interface, so we downcast.
+                if let Some(html_document) = window
+                    .document()
+                    .and_then(|d| d.dyn_into::<web_sys::HtmlDocument>().ok())
+                {
+                    let max_age = 60 * 60 * 24 * 365; // 1 year
+                    let new_cookie = format!(
+                        "krynon.lang={code}; path=/; max-age={max_age}; SameSite=Lax"
+                    );
+                    let current = html_document.cookie().ok();
+                    let combined = match current {
+                        Some(c) if c.is_empty() => new_cookie,
+                        Some(c) if c.contains("krynon.lang=") => {
+                            let parts: Vec<&str> = c.split(';').collect();
+                            let mut kept: Vec<&str> = Vec::new();
+                            for p in parts {
+                                if !p.trim_start().starts_with("krynon.lang=") {
+                                    kept.push(p);
+                                }
+                            }
+                            let mut s = kept.join(";");
+                            if !s.is_empty() {
+                                s.push(';');
+                            }
+                            s.push_str(&new_cookie);
+                            s
+                        }
+                        Some(c) => {
+                            let mut s = c;
+                            s.push(';');
+                            s.push_str(&new_cookie);
+                            s
+                        }
+                        None => new_cookie,
+                    };
+                    let _ = html_document.set_cookie(&combined);
+                }
+            }
+        });
+    }
 
     // BCP 47 locale strings (database-backed). The default locale is used as
     // the fallback when an entity is missing a translation for the active

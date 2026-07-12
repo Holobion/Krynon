@@ -18,6 +18,13 @@ tokio = { version = "1.37", default-features = false, features = ["sync"], optio
 dioxus = { version = "0.7.1", features = ["router", "fullstack"] }
 serde = { version = "1.0.228", features = ["derive"] }
 
+[target.'cfg(target_family = "wasm")'.dependencies]
+# Direct web-sys access for localStorage persistence and cookie-based
+# language preference (only on the wasm client).
+web-sys = { version = "0.3", features = ["Window", "Storage", "Document", "HtmlDocument"] }
+wasm-bindgen = "0.2"
+js-sys = "0.3"
+
 [features]
 default = ["web", "server"]
 

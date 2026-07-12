@@ -1,0 +1,7 @@
+target
+.env
+*.md
+.gitignore
+docs
+.github
+.githooks

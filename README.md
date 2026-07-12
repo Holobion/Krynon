@@ -6,7 +6,6 @@
 
 An open-source analytical classification engine owned and maintained by the [Holobion](https://github.com/Holobion) organisation.
 
-
 ## What is Krynon?
 
 Krynon is an analytical classification engine designed to help users find the exact food or object that fits their specific needs. Instead of relying on generic five-star reviews, it evaluates items against a custom set of detailed characteristics.
@@ -94,15 +93,60 @@ To deploy the production stack:
    - `APP_PORT`
 
 2. **Run the production containers**:
+
    ```bash
    docker compose up -d --build
    ```
+
    This will build the optimized production image using `Dockerfile` and start both the application container and the PostgreSQL database container in the background.
 
 3. **Monitor Logs**:
-   ```bash
-   docker compose logs -f
-   ```
+
+    ```bash
+    docker compose logs -f
+    ```
+
+## Continuous Integration & Deployment
+
+Every push to `main` triggers the [`Docker` workflow](.github/workflows/docker.yml), which builds the production image from `Dockerfile` and publishes it to the **GitHub Container Registry**:
+
+```txt
+ghcr.io/holobion/krynon
+```
+
+The image is published under several tags, derived from `Cargo.toml`'s `version` field (the single source of truth):
+
+| Tag              | When                                                     |
+| ---------------- | -------------------------------------------------------- |
+| `latest`         | On every push to `main`                                  |
+| `0.1.0`          | Matches the `version` field in `Cargo.toml`              |
+| `sha-<short>`    | Always, for traceability                                 |
+
+To release a new version, **just bump `version` in `Cargo.toml` and push to `main`** — no git tags required. The image will be rebuilt and republished automatically under the new version tag (and `latest`).
+
+### Local Git Hook: Auto-Bump on Push
+
+A [pre-push hook](.githooks/pre-push) is included to keep the version in `Cargo.toml` in sync with your work. When you push to `main` and `Cargo.toml` is part of the pushed commits, the hook automatically bumps the **minor** version (e.g. `0.1.0` → `0.2.0`) and appends a `chore(release): bump version to X.Y.Z` commit before the push goes through.
+
+**Install once per clone:**
+
+```bash
+git config core.hooksPath .githooks
+```
+
+**Skip for a single push:**
+
+```bash
+git push --no-verify
+```
+
+**How it works end-to-end:**
+
+1. You commit changes to a feature branch and merge to `main`.
+2. You run `git push origin main`.
+3. The pre-push hook detects `Cargo.toml` in the diff, bumps the minor version, and commits the change.
+4. The push goes through with the new commit included.
+5. The `Docker` workflow runs, reads the new version from `Cargo.toml`, and publishes the image to GHCR.
 
 ## Project Structure
 
@@ -114,8 +158,10 @@ To deploy the production stack:
   - `views/`: Application views/pages.
 - `migrations/`: SQL migration files for the database schema.
 - `docker-compose.yml`: Docker Compose configuration for the PostgreSQL database.
+- `Dockerfile`: Multi-stage production build (release server + WASM assets).
 - `.env.example`: Example environment variables for database configuration.
-
+- `.github/workflows/`: GitHub Actions CI/CD workflows.
+- `.githooks/`: Tracked git hooks (see [Continuous Integration & Deployment](#continuous-integration--deployment)).
 
 ## Resources & Links
 

@@ -11,7 +11,8 @@ pub fn CategoryPage(id: String) -> Element {
     let lang = use_context::<Signal<crate::i18n::Language>>();
     let default_locale = use_context::<Signal<String>>();
     let mut search_query = use_context::<Signal<String>>();
-    let data = use_resource(move || async move { load_app_data(lang().as_code().to_string()).await });
+    let data =
+        use_resource(move || async move { load_app_data(lang().as_code().to_string()).await });
     let cat_id = id.clone();
 
     rsx! {

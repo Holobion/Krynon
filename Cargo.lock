@@ -3231,9 +3231,12 @@ version = "0.1.0"
 dependencies = [
  "dioxus",
  "dotenvy",
+ "js-sys",
  "serde",
  "sqlx",
  "tokio",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]

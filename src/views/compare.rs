@@ -24,6 +24,11 @@ pub fn Compare() -> Element {
         load_app_data(lang().as_code().to_string()).await
     });
 
+    // Note: we do NOT reset the shared `search_query` here. The user expects
+    // their search to persist while they navigate to a product type, view it,
+    // and come back to the workspace. The signal is initialized to an empty
+    // string in `App` and only modified by the search input itself.
+
     let query_str = search_query.read().to_lowercase();
 
     rsx! {
@@ -146,32 +151,26 @@ pub fn Compare() -> Element {
                                 || tr_description(&cat.translations, &active, &default_locale_val)
                                     .to_lowercase()
                                     .contains(&query_str)
-                                || product_types.iter()
-                                    .filter(|pt| pt.category_ids.contains(&cat.id))
-                                    .any(|pt| tr_name(&pt.translations, &active, &default_locale_val)
-                                        .to_lowercase()
-                                        .contains(&query_str))
                         }).cloned().collect()
                     };
 
-                    // Also find product types that match directly but whose category isn't listed
-                    let direct_pt_matches: Vec<ProductType> = if !query_str.is_empty() {
+                    // Also find product types that match directly
+                    let matching_product_types: Vec<ProductType> = if query_str.is_empty() {
+                        Vec::new()
+                    } else {
                         product_types.iter().filter(|pt| {
-                            (tr_name(&pt.translations, &active, &default_locale_val)
+                            tr_name(&pt.translations, &active, &default_locale_val)
                                 .to_lowercase()
                                 .contains(&query_str)
                                 || tr_description(&pt.translations, &active, &default_locale_val)
                                     .to_lowercase()
-                                    .contains(&query_str))
-                                && !filtered_categories.iter().any(|cat| pt.category_ids.contains(&cat.id))
+                                    .contains(&query_str)
                         }).cloned().collect()
-                    } else {
-                        Vec::new()
                     };
 
                     rsx! {
                         // If search is active and has direct product type matches not covered by categories
-                        if !query_str.is_empty() && filtered_categories.is_empty() && direct_pt_matches.is_empty() {
+                        if !query_str.is_empty() && filtered_categories.is_empty() && matching_product_types.is_empty() {
                             div {
                                 class: "flex flex-col items-center justify-center py-20 text-center space-y-4",
                                 span { class: "text-4xl", "🔍" }
@@ -188,62 +187,68 @@ pub fn Compare() -> Element {
                             }
                         }
 
-                        // Section header
-                        div {
-                            class: "border-b-1.5 border-kr-text-nucleus pb-3 mb-8 flex justify-between items-end",
-                            h2 {
-                                class: "text-lg font-bold tracking-widest uppercase font-display",
-                                if query_str.is_empty() {
-                                    "{lang().t(\"All Categories\")}"
-                                } else {
-                                    "{lang().t(\"Search Results\")}"
+                        // Categories section (hidden only if there are no category matches and a search is active)
+                        if query_str.is_empty() || !filtered_categories.is_empty() {
+                            div {
+                                class: "border-b-1.5 border-kr-text-nucleus pb-3 mb-8 flex justify-between items-end",
+                                h2 {
+                                    class: "text-lg font-bold tracking-widest uppercase font-display",
+                                    if query_str.is_empty() {
+                                        "{lang().t(\"All Categories\")}"
+                                    } else {
+                                        "{lang().t(\"Matching Categories\")}"
+                                    }
+                                }
+                                span {
+                                    class: "font-mono text-xs text-kr-text-matrix hidden sm:inline",
+                                    "{filtered_categories.len()} {lang().t(\"categories\")}"
                                 }
                             }
-                            span {
-                                class: "font-mono text-xs text-kr-text-matrix hidden sm:inline",
-                                "{filtered_categories.len()} {lang().t(\"categories\")}"
-                            }
-                        }
 
-                        // Category cards grid
-                        div {
-                            class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6",
-                            for cat in filtered_categories.iter() {
-                                {
-                                    let cat = cat.clone();
-                                    let cat_id = cat.id.clone();
-                                    let cat_pts: Vec<ProductType> = product_types.iter()
-                                        .filter(|pt| pt.category_ids.contains(&cat.id))
-                                        .cloned()
-                                        .collect();
-                                    let pt_count = cat_pts.len();
-                                    rsx! {
-                                        CategoryCard {
-                                            key: "{cat.id}",
-                                            category: cat,
-                                            product_types: cat_pts,
-                                            pt_count,
-                                            target_id: cat_id,
+                            // Category cards grid
+                            div {
+                                class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6",
+                                for cat in filtered_categories.iter() {
+                                    {
+                                        let cat = cat.clone();
+                                        let cat_id = cat.id.clone();
+                                        let cat_pts: Vec<ProductType> = product_types.iter()
+                                            .filter(|pt| pt.category_ids.contains(&cat.id))
+                                            .cloned()
+                                            .collect();
+                                        let pt_count = cat_pts.len();
+                                        rsx! {
+                                            CategoryCard {
+                                                key: "{cat.id}",
+                                                category: cat,
+                                                product_types: cat_pts,
+                                                pt_count,
+                                                target_id: cat_id,
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
 
-                        // Direct product type matches (orphan from search)
-                        if !direct_pt_matches.is_empty() {
+                        // Matching product types section (only when searching and there are matches)
+                        if !query_str.is_empty() && !matching_product_types.is_empty() {
                             div {
-                                class: "mt-10",
+                                class: "mt-12",
                                 div {
                                     class: "border-b-1.5 border-kr-text-nucleus pb-3 mb-6 flex justify-between items-end",
                                     h2 {
                                         class: "text-lg font-bold tracking-widest uppercase font-display",
                                         "{lang().t(\"Matching Product Types\")}"
                                     }
+                                    span {
+                                        class: "font-mono text-xs text-kr-text-matrix hidden sm:inline",
+                                        "{matching_product_types.len()} {lang().t(\"product types\")}"
+                                    }
                                 }
                                 div {
                                     class: "grid grid-cols-1 md:grid-cols-2 gap-4",
-                                    for pt in direct_pt_matches.iter() {
+                                    for pt in matching_product_types.iter() {
                                         {
                                             let pt = (*pt).clone();
                                             let pt_id = pt.id.clone();
@@ -503,9 +508,13 @@ fn CreateProductModal(
             .product_types
             .iter()
             .filter(|product_type| {
-                tr_name(&product_type.translations, &active_locale, &default_locale_val)
-                    .to_lowercase()
-                    .contains(&product_type_query)
+                tr_name(
+                    &product_type.translations,
+                    &active_locale,
+                    &default_locale_val,
+                )
+                .to_lowercase()
+                .contains(&product_type_query)
                     || tr_description(
                         &product_type.translations,
                         &active_locale,
@@ -534,7 +543,11 @@ fn CreateProductModal(
             active_locale.clone(),
             crate::model::LocalizedText {
                 name: new_name,
-                description: if new_desc.is_empty() { None } else { Some(new_desc) },
+                description: if new_desc.is_empty() {
+                    None
+                } else {
+                    Some(new_desc)
+                },
             },
         );
         ProductType {
@@ -546,14 +559,16 @@ fn CreateProductModal(
             presets: Vec::new(),
         }
     } else {
-        selected_product_type.clone().unwrap_or_else(|| ProductType {
-            id: "__preview__".to_string(),
-            emoji: "📦".to_string(),
-            translations: std::collections::HashMap::new(),
-            category_ids: Vec::new(),
-            specific_criteria: Vec::new(),
-            presets: Vec::new(),
-        })
+        selected_product_type
+            .clone()
+            .unwrap_or_else(|| ProductType {
+                id: "__preview__".to_string(),
+                emoji: "📦".to_string(),
+                translations: std::collections::HashMap::new(),
+                category_ids: Vec::new(),
+                specific_criteria: Vec::new(),
+                presets: Vec::new(),
+            })
     };
 
     let criteria = get_combined_criteria(&active_criteria_product_type, &app_data.categories);

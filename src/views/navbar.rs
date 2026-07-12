@@ -11,7 +11,10 @@ pub fn Navbar() -> Element {
     } else {
         "hover:underline hover:underline-offset-4"
     };
-    let compare_class = if matches!(route, Route::Compare {} | Route::CategoryPage { .. } | Route::WorkspacePage { .. }) {
+    let compare_class = if matches!(
+        route,
+        Route::Compare {} | Route::CategoryPage { .. } | Route::WorkspacePage { .. }
+    ) {
         "underline decoration-2 underline-offset-4"
     } else {
         "hover:underline hover:underline-offset-4"
@@ -37,7 +40,7 @@ pub fn Navbar() -> Element {
                         class: "w-12 h-12 text-kr-text-nucleus shrink-0 transition-transform duration-300 group-hover:scale-105",
                         fill: "currentColor",
                         xmlns: "http://www.w3.org/2000/svg",
-                        
+
                         // Left cluster (Separated facet A)
                         circle { cx: "35", cy: "50", r: "4.5" }
                         circle { cx: "30", cy: "45", r: "3.2" }
@@ -48,7 +51,7 @@ pub fn Navbar() -> Element {
                         circle { cx: "45", cy: "50", r: "1.5" }
                         circle { cx: "28", cy: "40", r: "1.4" }
                         circle { cx: "42", cy: "62", r: "1.3" }
-                        
+
                         // Right cluster (Separated facet B)
                         circle { cx: "65", cy: "50", r: "4.5" }
                         circle { cx: "70", cy: "55", r: "3.2" }
@@ -59,7 +62,7 @@ pub fn Navbar() -> Element {
                         circle { cx: "55", cy: "50", r: "1.5" }
                         circle { cx: "72", cy: "60", r: "1.4" }
                         circle { cx: "58", cy: "38", r: "1.3" }
-                        
+
                         // Floating scattered dots in between (Separation line parameter space)
                         circle { cx: "50", cy: "30", r: "0.8" }
                         circle { cx: "50", cy: "70", r: "0.8" }
@@ -80,10 +83,10 @@ pub fn Navbar() -> Element {
                 nav {
                     class: "flex items-center gap-6 sm:gap-8 font-display text-xs uppercase font-bold tracking-wider",
 
-                    // If we're on the home page, scroll directly to phylogeny/archive. 
-                    // Otherwise, route to / first with anchor parameters.
-                    a {
-                        href: "/#phylogeny",
+                    // Use client-side navigation to avoid a full page reload
+                    // (and the dev-server hot-patch toast that triggers on reload).
+                    Link {
+                        to: Route::Home {},
                         class: "text-kr-text-nucleus {home_class}",
                         "{lang().t(\"Concepts\")}"
                     }

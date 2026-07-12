@@ -12,7 +12,8 @@ pub fn WorkspacePage(id: String) -> Element {
     let lang = use_context::<Signal<crate::i18n::Language>>();
     let default_locale = use_context::<Signal<String>>();
     let mut search_query = use_context::<Signal<String>>();
-    let data = use_resource(move || async move { load_app_data(lang().as_code().to_string()).await });
+    let data =
+        use_resource(move || async move { load_app_data(lang().as_code().to_string()).await });
     let pt_id = id.clone();
 
     let mut categories = use_signal(Vec::<Category>::new);
@@ -37,7 +38,8 @@ pub fn WorkspacePage(id: String) -> Element {
             products.set(app_data.products.clone());
             if let Some(pt) = app_data.product_types.iter().find(|p| p.id == pt_id_effect) {
                 let combined = get_combined_criteria(pt, &app_data.categories);
-                let initial: HashMap<String, f64> = combined.iter().map(|c| (c.id.clone(), 5.0)).collect();
+                let initial: HashMap<String, f64> =
+                    combined.iter().map(|c| (c.id.clone(), 5.0)).collect();
                 weights.set(initial);
             }
         }
@@ -56,27 +58,32 @@ pub fn WorkspacePage(id: String) -> Element {
     let maybe_pt = product_types.read().iter().find(|p| p.id == pt_id).cloned();
     let pt = match maybe_pt {
         Some(p) => p,
-        None => return rsx! {
-            div { class: "max-w-6xl mx-auto px-6 py-20 text-center space-y-4",
-                h2 { class: "text-xl font-bold text-kr-text-nucleus font-display", "{lang().t(\"Product type not found\")}" }
-                Link { to: Route::Compare {}, class: "text-kr-turquoise text-sm hover:underline", "{lang().t(\"← Back to Workspace\")}" }
+        None => {
+            return rsx! {
+                div { class: "max-w-6xl mx-auto px-6 py-20 text-center space-y-4",
+                    h2 { class: "text-xl font-bold text-kr-text-nucleus font-display", "{lang().t(\"Product type not found\")}" }
+                    Link { to: Route::Compare {}, class: "text-kr-turquoise text-sm hover:underline", "{lang().t(\"← Back to Workspace\")}" }
+                }
             }
-        },
+        }
     };
 
     let active_criteria = get_combined_criteria(&pt, &categories.read());
     let active_presets = pt.presets.clone();
 
     // Parent category for breadcrumb
-    let parent_cat = pt.category_ids.first().and_then(|cat_id| {
-        categories.read().iter().find(|c| &c.id == cat_id).cloned()
-    });
+    let parent_cat = pt
+        .category_ids
+        .first()
+        .and_then(|cat_id| categories.read().iter().find(|c| &c.id == cat_id).cloned());
 
     let current_weights = weights();
     let query_str = search_query.read().to_lowercase();
     let save_error = add_product_error.read().clone();
 
-    let mut sorted_products: Vec<Product> = products.read().iter()
+    let mut sorted_products: Vec<Product> = products
+        .read()
+        .iter()
         .filter(|p| p.product_type_id == pt.id)
         .filter(|p| {
             query_str.is_empty()
@@ -90,7 +97,8 @@ pub fn WorkspacePage(id: String) -> Element {
         .cloned()
         .collect();
     sorted_products.sort_by(|a, b| {
-        calculate_score(b, &current_weights).partial_cmp(&calculate_score(a, &current_weights))
+        calculate_score(b, &current_weights)
+            .partial_cmp(&calculate_score(a, &current_weights))
             .unwrap_or(std::cmp::Ordering::Equal)
     });
 

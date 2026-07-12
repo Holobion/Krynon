@@ -41,22 +41,14 @@ impl Criterion {
     /// the entity's default locale, then to the first available translation.
     /// Returns `None` only if no translations exist.
     #[allow(dead_code)]
-    pub fn localized_name(
-        &self,
-        requested: &str,
-        default_locale: &str,
-    ) -> Option<String> {
+    pub fn localized_name(&self, requested: &str, default_locale: &str) -> Option<String> {
         localized_value(&self.translations, requested, default_locale, |t| {
             t.name.clone()
         })
     }
 
     #[allow(dead_code)]
-    pub fn localized_description(
-        &self,
-        requested: &str,
-        default_locale: &str,
-    ) -> Option<String> {
+    pub fn localized_description(&self, requested: &str, default_locale: &str) -> Option<String> {
         localized_value(&self.translations, requested, default_locale, |t| {
             t.description.clone().unwrap_or_default()
         })
@@ -298,7 +290,11 @@ fn slugify(value: &str) -> String {
 #[cfg(feature = "server")]
 fn unique_id_from_name(name: &str, fallback: &str) -> String {
     let slug = slugify(name);
-    let base = if slug.is_empty() { fallback.to_string() } else { slug };
+    let base = if slug.is_empty() {
+        fallback.to_string()
+    } else {
+        slug
+    };
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -310,10 +306,11 @@ fn unique_id_from_name(name: &str, fallback: &str) -> String {
 async fn generate_unique_category_id(pool: &PgPool, name: &str) -> Result<String, sqlx::Error> {
     loop {
         let candidate = unique_id_from_name(name, "category");
-        let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM categories WHERE id = $1)")
-            .bind(&candidate)
-            .fetch_one(pool)
-            .await?;
+        let exists: bool =
+            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM categories WHERE id = $1)")
+                .bind(&candidate)
+                .fetch_one(pool)
+                .await?;
         if !exists {
             return Ok(candidate);
         }
@@ -321,10 +318,7 @@ async fn generate_unique_category_id(pool: &PgPool, name: &str) -> Result<String
 }
 
 #[cfg(feature = "server")]
-async fn generate_unique_product_type_id(
-    pool: &PgPool,
-    name: &str,
-) -> Result<String, sqlx::Error> {
+async fn generate_unique_product_type_id(pool: &PgPool, name: &str) -> Result<String, sqlx::Error> {
     loop {
         let candidate = unique_id_from_name(name, "product-type");
         let exists: bool =
@@ -341,7 +335,11 @@ async fn generate_unique_product_type_id(
 #[cfg(feature = "server")]
 async fn generate_unique_product_id(pool: &PgPool, name: &str) -> Result<String, sqlx::Error> {
     let base_slug = slugify(name);
-    let base = if base_slug.is_empty() { "product".to_string() } else { base_slug };
+    let base = if base_slug.is_empty() {
+        "product".to_string()
+    } else {
+        base_slug
+    };
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -353,10 +351,11 @@ async fn generate_unique_product_id(pool: &PgPool, name: &str) -> Result<String,
         } else {
             format!("{}-{}-{}", base, timestamp, counter)
         };
-        let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM products WHERE id = $1)")
-            .bind(&candidate)
-            .fetch_one(pool)
-            .await?;
+        let exists: bool =
+            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM products WHERE id = $1)")
+                .bind(&candidate)
+                .fetch_one(pool)
+                .await?;
         if !exists {
             return Ok(candidate);
         }
@@ -516,7 +515,10 @@ async fn fetch_weight_profile_translations(
         let name: String = row.get("name");
         out.entry(id).or_default().insert(
             locale,
-            LocalizedText { name, description: None },
+            LocalizedText {
+                name,
+                description: None,
+            },
         );
     }
     Ok(out)
@@ -566,10 +568,7 @@ pub async fn fetch_criteria_for_category(
     .bind(category_id)
     .fetch_all(pool)
     .await?;
-    let ids: Vec<String> = rows
-        .iter()
-        .map(|r| r.get::<String, _>("id"))
-        .collect();
+    let ids: Vec<String> = rows.iter().map(|r| r.get::<String, _>("id")).collect();
     let translations = fetch_criterion_translations(pool, &ids).await?;
     let mut out = Vec::with_capacity(rows.len());
     for row in rows {
@@ -599,10 +598,7 @@ pub async fn fetch_specific_criteria_for_product_type(
     .bind(product_type_id)
     .fetch_all(pool)
     .await?;
-    let ids: Vec<String> = rows
-        .iter()
-        .map(|r| r.get::<String, _>("id"))
-        .collect();
+    let ids: Vec<String> = rows.iter().map(|r| r.get::<String, _>("id")).collect();
     let translations = fetch_criterion_translations(pool, &ids).await?;
     let mut out = Vec::with_capacity(rows.len());
     for row in rows {
@@ -687,11 +683,10 @@ pub async fn fetch_weight_profiles_for_product_type(
 
 #[cfg(feature = "server")]
 pub async fn fetch_all_products(pool: &PgPool) -> Result<Vec<Product>, sqlx::Error> {
-    let rows = sqlx::query(
-        "SELECT id, price, quantity, unit, product_type_id FROM products ORDER BY id",
-    )
-    .fetch_all(pool)
-    .await?;
+    let rows =
+        sqlx::query("SELECT id, price, quantity, unit, product_type_id FROM products ORDER BY id")
+            .fetch_all(pool)
+            .await?;
     let ids: Vec<String> = rows.iter().map(|r| r.get::<String, _>("id")).collect();
     let translations = fetch_product_translations(pool, &ids).await?;
     let mut out = Vec::with_capacity(rows.len());
@@ -721,12 +716,10 @@ pub async fn fetch_scores_for_product(
     pool: &PgPool,
     product_id: &str,
 ) -> Result<HashMap<String, f64>, sqlx::Error> {
-    let rows = sqlx::query(
-        "SELECT criterion_id, score FROM product_scores WHERE product_id = $1",
-    )
-    .bind(product_id)
-    .fetch_all(pool)
-    .await?;
+    let rows = sqlx::query("SELECT criterion_id, score FROM product_scores WHERE product_id = $1")
+        .bind(product_id)
+        .fetch_all(pool)
+        .await?;
     let mut out = HashMap::new();
     for row in rows {
         let criterion_id: String = row.get("criterion_id");
@@ -749,7 +742,11 @@ pub async fn load_app_data(language: String) -> Result<AppData, ServerFnError> {
     // The `language` query parameter is accepted for backwards compatibility
     // but the backend now returns raw translation maps; the frontend does the
     // fallback resolution. We still normalize an empty value to the default.
-    let _ = if language.is_empty() { default_locale.clone() } else { language };
+    let _ = if language.is_empty() {
+        default_locale.clone()
+    } else {
+        language
+    };
 
     let categories = fetch_all_categories(pool)
         .await
@@ -1242,10 +1239,7 @@ mod tests {
 
     #[test]
     fn fallback_exact_locale_wins() {
-        let t = map(&[
-            ("en", "English", None),
-            ("fr", "Français", Some("desc FR")),
-        ]);
+        let t = map(&[("en", "English", None), ("fr", "Français", Some("desc FR"))]);
         let v = localized_value(&t, "fr", "en", |x| x.name.clone());
         assert_eq!(v.as_deref(), Some("Français"));
     }

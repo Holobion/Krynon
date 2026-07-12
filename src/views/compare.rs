@@ -1,257 +1,18 @@
-use crate::components::{ProductCard, WeightSlider};
-use crate::model::{
-    calculate_score, get_combined_criteria, load_app_data, Category, Criterion, Product,
-    ProductType,
-};
+use crate::model::{load_app_data, Category, ProductType};
+use crate::Route;
 use dioxus::prelude::*;
-use std::collections::HashMap;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum WorkspaceMode {
-    ProductType,
-    Category,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum CreationMode {
-    None,
-    Category,
-    ProductType,
-}
+// ==========================================
+// Compare = Workspace Home (Category Grid)
+// ==========================================
 
 #[component]
 pub fn Compare() -> Element {
+    let lang = use_context::<Signal<crate::i18n::Language>>();
+    let mut search_query = use_context::<Signal<String>>();
     let data = use_resource(move || async move { load_app_data().await });
 
-    let mut categories = use_signal(Vec::<Category>::new);
-    let mut product_types = use_signal(Vec::<ProductType>::new);
-    let mut products = use_signal(Vec::<Product>::new);
-
-    let mut workspace_mode = use_signal(|| WorkspaceMode::ProductType);
-    let mut selected_prod_type_idx = use_signal(|| 0);
-    let mut selected_category_idx = use_signal(|| 0);
-    let mut search_query = use_context::<Signal<String>>();
-
-    let mut creation_mode = use_signal(|| CreationMode::None);
-    let mut new_name = use_signal(|| "".to_string());
-    let mut new_description = use_signal(|| "".to_string());
-    let mut new_emoji = use_signal(|| "".to_string());
-    let mut selected_criteria = use_signal(|| Vec::<String>::new());
-    let mut selected_categories = use_signal(|| Vec::<String>::new());
-    let mut custom_criteria = use_signal(|| Vec::<Criterion>::new());
-    let mut temp_crit_name = use_signal(|| "".to_string());
-    let mut temp_crit_desc = use_signal(|| "".to_string());
-    let mut temp_crit_emoji = use_signal(|| "".to_string());
-
-    let mut show_add_product_form = use_signal(|| false);
-    let mut new_product_name = use_signal(|| "".to_string());
-    let mut new_product_price = use_signal(|| "".to_string());
-    let mut new_product_quantity = use_signal(|| "".to_string());
-    let mut new_product_unit = use_signal(|| "".to_string());
-    let mut new_product_description = use_signal(|| "".to_string());
-    let mut new_product_scores = use_signal(HashMap::<String, f64>::new);
-
-    // Initial weights setup. Populated once DB data is loaded.
-    let mut weights = use_signal(HashMap::<String, f64>::new);
-
-    use_effect(move || {
-        if let Some(Ok(app_data)) = data() {
-            categories.set(app_data.categories.clone());
-            product_types.set(app_data.product_types.clone());
-            products.set(app_data.products.clone());
-            selected_prod_type_idx.set(0);
-            selected_category_idx.set(0);
-
-            let mut initial_weights = HashMap::new();
-            if let Some(first_type) = app_data.product_types.first() {
-                let combined = get_combined_criteria(first_type, &app_data.categories);
-                for crit in combined {
-                    initial_weights.insert(crit.id, 5.0);
-                }
-            }
-            weights.set(initial_weights);
-        }
-    });
-
-    // Synchronize weights when mode or tab selections change
-    use_effect(move || {
-        let mode = workspace_mode();
-        let mut new_weights = HashMap::new();
-        match mode {
-            WorkspaceMode::ProductType => {
-                let pts = product_types.read();
-                if selected_prod_type_idx() < pts.len() {
-                    let pt = &pts[selected_prod_type_idx()];
-                    let combined = get_combined_criteria(pt, &categories.read());
-                    for crit in combined {
-                        new_weights.insert(crit.id, 5.0);
-                    }
-                }
-            }
-            WorkspaceMode::Category => {
-                let cats = categories.read();
-                if selected_category_idx() < cats.len() {
-                    let cat = &cats[selected_category_idx()];
-                    for crit in &cat.criteria {
-                        new_weights.insert(crit.id.clone(), 5.0);
-                    }
-                }
-            }
-        }
-        weights.set(new_weights);
-    });
-
-    if let Some(Err(_)) = data() {
-        return rsx! { div { class: "max-w-6xl mx-auto px-6 py-20 text-rose-600", "Failed to load product data." } };
-    }
-
-    if categories.read().is_empty() || product_types.read().is_empty() {
-        return rsx! { div { class: "max-w-6xl mx-auto px-6 py-20 text-kr-matrix", "Loading product data..." } };
-    }
-
-    // Get active entities and active criteria
-    let (active_name, active_emoji, active_desc, active_criteria, active_presets) =
-        match workspace_mode() {
-            WorkspaceMode::ProductType => {
-                let pt = product_types.read()[selected_prod_type_idx()].clone();
-                let crit = get_combined_criteria(&pt, &categories.read());
-                (pt.name, pt.emoji, pt.description, crit, pt.presets)
-            }
-            WorkspaceMode::Category => {
-                let cat = categories.read()[selected_category_idx()].clone();
-                let crit = cat.criteria.clone();
-                // Generate some dynamic category presets
-                let mut presets = vec![crate::model::WeightProfile {
-                    name: "Balanced Benchmark".to_string(),
-                    weights: crit.iter().map(|c| (c.id.clone(), 5.0)).collect(),
-                }];
-                // Add environment or ethics focused preset depending on criteria
-                if crit.iter().any(|c| {
-                    c.id == "carbon_footprint" || c.id == "e_waste" || c.id == "durability"
-                }) {
-                    presets.push(crate::model::WeightProfile {
-                        name: "Climate First".to_string(),
-                        weights: crit
-                            .iter()
-                            .map(|c| {
-                                let w = if c.id == "carbon_footprint"
-                                    || c.id == "e_waste"
-                                    || c.id == "durability"
-                                {
-                                    10.0
-                                } else {
-                                    2.0
-                                };
-                                (c.id.clone(), w)
-                            })
-                            .collect(),
-                    });
-                }
-                if crit.iter().any(|c| c.id == "sourcing_ethics") {
-                    presets.push(crate::model::WeightProfile {
-                        name: "Ethics First".to_string(),
-                        weights: crit
-                            .iter()
-                            .map(|c| {
-                                let w = if c.id == "sourcing_ethics" { 10.0 } else { 3.0 };
-                                (c.id.clone(), w)
-                            })
-                            .collect(),
-                    });
-                }
-                (cat.name, cat.emoji, cat.description, crit, presets)
-            }
-        };
-
-    // Filter and Sort products (Search query suggestions are handled separately below)
-    let current_weights = weights();
-    let mut sorted_products = match workspace_mode() {
-        WorkspaceMode::ProductType => {
-            let pt = &product_types.read()[selected_prod_type_idx()];
-            products
-                .read()
-                .iter()
-                .filter(|p| p.product_type_id == pt.id)
-                .cloned()
-                .collect::<Vec<Product>>()
-        }
-        WorkspaceMode::Category => {
-            let cat = &categories.read()[selected_category_idx()];
-            products
-                .read()
-                .iter()
-                .filter(|p| {
-                    if let Some(pt) = product_types
-                        .read()
-                        .iter()
-                        .find(|t| t.id == p.product_type_id)
-                    {
-                        pt.category_ids.contains(&cat.id)
-                    } else {
-                        false
-                    }
-                })
-                .cloned()
-                .collect::<Vec<Product>>()
-        }
-    };
-
-    sorted_products.sort_by(|a, b| {
-        let score_a = calculate_score(a, &current_weights);
-        let score_b = calculate_score(b, &current_weights);
-        score_b
-            .partial_cmp(&score_a)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-
-    // Compute suggestion query matches
     let query_str = search_query.read().to_lowercase();
-    let matched_categories = if !query_str.is_empty() {
-        categories
-            .read()
-            .iter()
-            .enumerate()
-            .filter(|(_, cat)| {
-                cat.name.to_lowercase().contains(&query_str)
-                    || cat.description.to_lowercase().contains(&query_str)
-            })
-            .map(|(idx, cat)| (idx, cat.clone()))
-            .collect::<Vec<(usize, Category)>>()
-    } else {
-        Vec::new()
-    };
-
-    let matched_product_types = if !query_str.is_empty() {
-        product_types
-            .read()
-            .iter()
-            .enumerate()
-            .filter(|(_, pt)| {
-                pt.name.to_lowercase().contains(&query_str)
-                    || pt.description.to_lowercase().contains(&query_str)
-            })
-            .map(|(idx, pt)| (idx, pt.clone()))
-            .collect::<Vec<(usize, ProductType)>>()
-    } else {
-        Vec::new()
-    };
-
-    let prod_type_btn_class = if workspace_mode() == WorkspaceMode::ProductType {
-        "bg-kr-primary text-white shadow-md kr-halo"
-    } else {
-        "text-kr-matrix hover:text-kr-nucleus"
-    };
-
-    let category_btn_class = if workspace_mode() == WorkspaceMode::Category {
-        "bg-kr-primary text-white shadow-md kr-halo"
-    } else {
-        "text-kr-matrix hover:text-kr-nucleus"
-    };
-
-    let active_criteria_for_reset = active_criteria.clone();
-    let active_criteria_for_sliders = active_criteria.clone();
-    let active_criteria_for_save = active_criteria.clone();
-    let active_criteria_for_cards = active_criteria.clone();
 
     rsx! {
         div {
@@ -259,40 +20,32 @@ pub fn Compare() -> Element {
 
             // Page Header
             div {
-                class: "flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8",
+                class: "mb-8",
                 div {
-                    h1 { class: "text-3xl font-black text-kr-nucleus tracking-tight font-display", "Classification Workspace" }
-                    p { class: "text-kr-matrix text-sm mt-1", "Inherit global criteria, configure custom weights, and perform deep comparative ranking." }
+                    class: "flex items-center gap-3 mb-2",
+                    div { class: "w-2 h-2 bg-kr-turquoise border border-kr-text-nucleus" }
+                    span {
+                        class: "font-mono text-xs uppercase tracking-widest text-kr-text-matrix border-l-2 border-kr-text-nucleus pl-3 py-0.5",
+                        "{lang().t(\"Classification Workspace // Category Index\")}"
+                    }
                 }
-
-                // Workspace Mode Toggle
-                div {
-                    class: "flex bg-kr-cytoplasm border border-kr-matrix/20 p-1 rounded-full shrink-0 shadow-sm",
-                    button {
-                        class: "px-5 py-2 rounded-full text-xs font-bold transition-all {prod_type_btn_class}",
-                        onclick: move |_| {
-                            workspace_mode.set(WorkspaceMode::ProductType);
-                        },
-                        "Compare by Product Type"
-                    }
-                    button {
-                        class: "px-5 py-2 rounded-full text-xs font-bold transition-all {category_btn_class}",
-                        onclick: move |_| {
-                            workspace_mode.set(WorkspaceMode::Category);
-                        },
-                        "Compare by Category"
-                    }
+                h1 {
+                    class: "text-3xl font-black text-kr-text-nucleus tracking-tight font-display uppercase",
+                    "{lang().t(\"Workspace\")}"
+                }
+                p {
+                    class: "text-kr-text-matrix text-sm mt-1 font-serif italic",
+                    "{lang().t(\"Select a category to explore product types and begin your comparative analysis.\")}"
                 }
             }
 
-            // Prominent Workspace Search Bar
+            // Search bar
             div {
                 class: "mb-8",
                 div {
-                    class: "relative flex items-center bg-kr-cytoplasm border border-kr-matrix/10 focus-within:border-kr-primary rounded-2xl px-5 py-4 text-kr-matrix focus-within:text-kr-nucleus transition-all shadow-sm",
-                    // Large magnifying glass icon
+                    class: "relative flex items-center bg-kr-cytoplasm border border-kr-text-nucleus focus-within:border-kr-turquoise px-5 py-4 text-kr-text-matrix focus-within:text-kr-text-nucleus transition-all bg-grid-pattern",
                     svg {
-                        class: "w-6 h-6 mr-4 shrink-0 text-kr-matrix/60",
+                        class: "w-6 h-6 mr-4 shrink-0 text-kr-text-nucleus",
                         fill: "none",
                         stroke: "currentColor",
                         view_box: "0 0 24 24",
@@ -304,20 +57,19 @@ pub fn Compare() -> Element {
                         }
                     }
                     input {
-                        class: "bg-transparent border-none outline-none text-base sm:text-lg w-full text-kr-nucleus placeholder-kr-matrix/60 font-medium",
+                        class: "bg-transparent border-none outline-none text-base sm:text-lg w-full text-kr-text-nucleus placeholder-kr-text-matrix/60 font-medium",
                         value: "{search_query}",
-                        placeholder: "Search product types or categories (e.g. coffee, technology)...",
+                        placeholder: "{lang().t(\"Search categories or product types...\")  }",
                         oninput: move |e| {
                             search_query.set(e.value());
                         }
                     }
                     if !search_query.read().is_empty() {
                         button {
-                            class: "hover:text-kr-primary text-kr-matrix transition-colors p-1",
+                            class: "hover:text-kr-turquoise text-kr-text-matrix transition-colors p-1",
                             onclick: move |_| {
                                 search_query.set("".to_string());
                             },
-                            // Large close icon
                             svg {
                                 class: "w-5 h-5",
                                 fill: "none",
@@ -335,1152 +87,287 @@ pub fn Compare() -> Element {
                 }
             }
 
-            if !query_str.is_empty() {
-                // Command Palette Suggestions View
-                div {
-                    class: "max-w-3xl mx-auto space-y-6 animate-fade-in-down",
-
+            match data() {
+                None => rsx! {
                     div {
-                        class: "flex justify-between items-center px-1",
-                        h3 { class: "text-xs font-bold text-kr-matrix uppercase tracking-widest font-display", "Search Results" }
-                        span {
-                            class: "text-xs text-kr-matrix font-semibold",
-                            "{matched_categories.len() + matched_product_types.len()} results found"
-                        }
-                    }
-
-                    if matched_categories.is_empty() && matched_product_types.is_empty() {
+                        class: "flex items-center justify-center py-32",
                         div {
-                            class: "flex flex-col items-center justify-center py-16 px-6 text-center bg-kr-cytoplasm border border-kr-matrix/10 kr-squarcle space-y-4 shadow-sm",
-                            span { class: "text-4xl", "🔍" }
-                            h4 { class: "text-lg font-bold text-kr-nucleus", "No matches found" }
-                            p { class: "text-kr-matrix text-xs max-w-sm leading-relaxed", "We couldn't find any category or product type matching \"{search_query}\". Try searching for 'coffee', 'rice', 'tech', or 'office'." }
-                            button {
-                                class: "kr-btn-pill px-5 py-2.5 text-white active:scale-95 text-xs shadow-md shadow-kr-primary/10",
-                                onclick: move |_| {
-                                    search_query.set("".to_string());
-                                },
-                                "Clear Search"
+                            class: "text-center space-y-4",
+                            div {
+                                class: "font-mono text-xs uppercase tracking-widest text-kr-text-matrix animate-pulse",
+                                "{lang().t(\"Loading classification data...\")}"
                             }
                         }
+                    }
+                },
+                Some(Err(_)) => rsx! {
+                    div {
+                        class: "py-20 text-rose-600 font-mono text-sm",
+                        "{lang().t(\"Failed to load product data.\")}"
+                    }
+                },
+                Some(Ok(app_data)) => {
+                    let categories = app_data.categories.clone();
+                    let product_types = app_data.product_types.clone();
+
+                    // Filter by search if query is active
+                    let filtered_categories: Vec<Category> = if query_str.is_empty() {
+                        categories.clone()
                     } else {
-                        div {
-                            class: "space-y-3",
+                        categories.iter().filter(|cat| {
+                            cat.name.to_lowercase().contains(&query_str)
+                                || cat.description.to_lowercase().contains(&query_str)
+                                || product_types.iter()
+                                    .filter(|pt| pt.category_ids.contains(&cat.id))
+                                    .any(|pt| pt.name.to_lowercase().contains(&query_str))
+                        }).cloned().collect()
+                    };
 
-                            // Render Category Matches
-                            for (idx, cat) in matched_categories {
-                                div {
-                                    key: "cat-{cat.id}",
-                                    class: "bg-kr-cytoplasm hover:bg-kr-membrane border border-kr-matrix/10 hover:border-kr-primary/35 p-5 kr-squarcle cursor-pointer transition-all duration-200 group flex justify-between items-center shadow-xs",
-                                    onclick: move |_| {
-                                        workspace_mode.set(WorkspaceMode::Category);
-                                        selected_category_idx.set(idx);
-                                        search_query.set("".to_string());
-                                    },
-                                    div {
-                                        class: "space-y-1.5 pr-4",
-                                        div {
-                                            class: "flex flex-wrap items-center gap-2",
-                                            span { class: "text-lg", "{cat.emoji}" }
-                                            h4 { class: "font-bold text-kr-nucleus group-hover:text-kr-primary transition-colors font-display", "{cat.name}" }
-                                            span {
-                                                class: "text-[9px] uppercase font-extrabold px-2 py-0.5 rounded bg-emerald-100 border border-emerald-200/50 text-emerald-700 tracking-wider",
-                                                "Category Benchmark"
-                                            }
-                                        }
-                                        p { class: "text-kr-matrix text-xs mt-1 line-clamp-1", "{cat.description}" }
-                                    }
-                                    span {
-                                        class: "text-kr-matrix group-hover:text-kr-primary group-hover:translate-x-1 transition-all text-xs font-bold shrink-0",
-                                        "Go to Benchmark ➔"
-                                    }
+                    // Also find product types that match directly but whose category isn't listed
+                    let direct_pt_matches: Vec<&ProductType> = if !query_str.is_empty() {
+                        product_types.iter().filter(|pt| {
+                            (pt.name.to_lowercase().contains(&query_str)
+                                || pt.description.to_lowercase().contains(&query_str))
+                                && !filtered_categories.iter().any(|cat| pt.category_ids.contains(&cat.id))
+                        }).collect()
+                    } else {
+                        Vec::new()
+                    };
+
+                    rsx! {
+                        // If search is active and has direct product type matches not covered by categories
+                        if !query_str.is_empty() && filtered_categories.is_empty() && direct_pt_matches.is_empty() {
+                            div {
+                                class: "flex flex-col items-center justify-center py-20 text-center space-y-4",
+                                span { class: "text-4xl", "🔍" }
+                                h3 { class: "text-lg font-bold text-kr-text-nucleus font-display", "{lang().t(\"No matches found\")}" }
+                                p { class: "text-kr-text-matrix text-sm max-w-sm font-serif italic",
+                                    "{lang().t(\"Try a different search term.\")}"
+                                }
+                                button {
+                                    style: "background-color: var(--color-kr-turquoise) !important; color: white !important;",
+                                    class: "kr-btn-pill px-5 py-2 text-xs transition-all active:scale-95 mt-2",
+                                    onclick: move |_| { search_query.set("".to_string()); },
+                                    "{lang().t(\"Clear Search\")}"
                                 }
                             }
+                        }
 
-                            // Render Product Type Matches
-                            for (idx, pt) in matched_product_types {
-                                div {
-                                    key: "pt-{pt.id}",
-                                    class: "bg-kr-cytoplasm hover:bg-kr-membrane border border-kr-matrix/10 hover:border-kr-primary/35 p-5 kr-squarcle cursor-pointer transition-all duration-200 group flex justify-between items-center shadow-xs",
-                                    onclick: move |_| {
-                                        workspace_mode.set(WorkspaceMode::ProductType);
-                                        selected_prod_type_idx.set(idx);
-                                        search_query.set("".to_string());
-                                    },
-                                    div {
-                                        class: "space-y-1.5 pr-4",
-                                        div {
-                                            class: "flex flex-wrap items-center gap-2",
-                                            span { class: "text-lg", "{pt.emoji}" }
-                                            h4 { class: "font-bold text-kr-nucleus group-hover:text-kr-primary transition-colors font-display", "{pt.name}" }
-                                            span {
-                                                class: "text-[9px] uppercase font-extrabold px-2 py-0.5 rounded bg-kr-primary/10 border border-kr-primary/20 text-kr-primary tracking-wider",
-                                                "Product Type Workspace"
-                                            }
+                        // Section header
+                        div {
+                            class: "border-b-1.5 border-kr-text-nucleus pb-3 mb-8 flex justify-between items-end",
+                            h2 {
+                                class: "text-lg font-bold tracking-widest uppercase font-display",
+                                if query_str.is_empty() {
+                                    "{lang().t(\"All Categories\")}"
+                                } else {
+                                    "{lang().t(\"Search Results\")}"
+                                }
+                            }
+                            span {
+                                class: "font-mono text-xs text-kr-text-matrix hidden sm:inline",
+                                "{filtered_categories.len()} {lang().t(\"categories\")}"
+                            }
+                        }
+
+                        // Category cards grid
+                        div {
+                            class: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6",
+
+                            for cat in filtered_categories.iter() {
+                                {
+                                    let cat = cat.clone();
+                                    let cat_id = cat.id.clone();
+                                    // Get product types belonging to this category
+                                    let cat_pts: Vec<ProductType> = product_types.iter()
+                                        .filter(|pt| pt.category_ids.contains(&cat.id))
+                                        .cloned()
+                                        .collect();
+                                    let pt_count = cat_pts.len();
+
+                                    rsx! {
+                                        CategoryCard {
+                                            key: "{cat.id}",
+                                            category: cat,
+                                            product_types: cat_pts,
+                                            pt_count,
+                                            target_id: cat_id,
                                         }
-                                        p { class: "text-kr-matrix text-xs mt-1 line-clamp-1", "{pt.description}" }
-                                    }
-                                    span {
-                                        class: "text-kr-matrix group-hover:text-kr-primary group-hover:translate-x-1 transition-all text-xs font-bold shrink-0",
-                                        "Go to Workspace ➔"
                                     }
                                 }
                             }
                         }
-                    }
 
-                    // Dynamic creation option at the bottom of the results
-                    if creation_mode() == CreationMode::None {
-                        div {
-                            class: "bg-kr-cytoplasm border border-kr-matrix/10 p-6 kr-squarcle shadow-md space-y-4 border-dashed border-2 hover:border-kr-primary/30 transition-all",
+                        // Direct product type matches (orphan from search)
+                        if !direct_pt_matches.is_empty() {
                             div {
-                                class: "flex items-start gap-4",
-                                span { class: "text-2xl p-2 bg-kr-membrane rounded-xl", "✨" }
+                                class: "mt-10",
                                 div {
-                                    h4 { class: "font-bold text-kr-nucleus font-display", "Can't find what you need?" }
-                                    p { class: "text-kr-matrix text-xs mt-1 leading-relaxed", "Define a custom Category or Product Type with your own criteria to evaluate products." }
-                                }
-                            }
-                            div {
-                                class: "flex flex-wrap gap-3 pt-2",
-                                button {
-                                    class: "px-4 py-2 bg-kr-primary hover:bg-kr-primary/95 text-white text-xs font-bold rounded-lg transition-all active:scale-95 shadow-sm",
-                                    onclick: move |_| {
-                                        new_name.set(search_query());
-                                        new_description.set("".to_string());
-                                        new_emoji.set("📂".to_string());
-                                        selected_criteria.write().clear();
-                                        custom_criteria.write().clear();
-                                        creation_mode.set(CreationMode::Category);
-                                    },
-                                    "Create Category"
-                                }
-                                button {
-                                    class: "px-4 py-2 bg-kr-membrane hover:bg-kr-cytoplasm border border-kr-matrix/20 hover:border-kr-primary/30 text-kr-nucleus text-xs font-bold rounded-lg transition-all active:scale-95 shadow-xs",
-                                    onclick: move |_| {
-                                        new_name.set(search_query());
-                                        new_description.set("".to_string());
-                                        new_emoji.set("📦".to_string());
-                                        selected_categories.write().clear();
-                                        selected_criteria.write().clear();
-                                        custom_criteria.write().clear();
-                                        creation_mode.set(CreationMode::ProductType);
-                                    },
-                                    "Create Product Type"
-                                }
-                            }
-                        }
-                    }
-
-                    if creation_mode() == CreationMode::Category {
-                        div {
-                            class: "bg-kr-cytoplasm border border-kr-primary/35 p-6 kr-squarcle shadow-lg space-y-6 animate-fade-in-down",
-                            div {
-                                class: "flex justify-between items-center border-b border-kr-matrix/10 pb-4",
-                                div {
-                                    h3 { class: "font-bold text-kr-nucleus text-lg font-display flex items-center gap-2",
-                                        span { "📂" }
-                                        span { "Create New Category" }
-                                    }
-                                    p { class: "text-kr-matrix text-xs mt-0.5", "Define a new evaluation category." }
-                                }
-                                button {
-                                    class: "text-kr-matrix hover:text-kr-nucleus text-xs font-bold",
-                                    onclick: move |_| {
-                                        creation_mode.set(CreationMode::None);
-                                    },
-                                    "Cancel"
-                                }
-                            }
-
-                            // Form fields
-                            div {
-                                class: "space-y-4",
-
-                                div {
-                                    class: "grid grid-cols-4 gap-4",
-                                    div {
-                                        class: "col-span-1 space-y-1.5",
-                                        label { class: "text-xs font-bold text-kr-matrix", "Emoji" }
-                                        input {
-                                            class: "bg-kr-membrane border border-kr-matrix/10 rounded-xl px-4 py-2.5 text-center text-lg w-full focus:outline-none focus:border-kr-primary text-kr-nucleus",
-                                            value: "{new_emoji}",
-                                            oninput: move |e| new_emoji.set(e.value()),
-                                        }
-                                    }
-                                    div {
-                                        class: "col-span-3 space-y-1.5",
-                                        label { class: "text-xs font-bold text-kr-matrix", "Category Name" }
-                                        input {
-                                            class: "bg-kr-membrane border border-kr-matrix/10 rounded-xl px-4 py-2.5 text-sm w-full focus:outline-none focus:border-kr-primary text-kr-nucleus font-medium",
-                                            placeholder: "e.g., Household Appliances",
-                                            value: "{new_name}",
-                                            oninput: move |e| new_name.set(e.value()),
-                                        }
+                                    class: "border-b-1.5 border-kr-text-nucleus pb-3 mb-6 flex justify-between items-end",
+                                    h2 {
+                                        class: "text-lg font-bold tracking-widest uppercase font-display",
+                                        "{lang().t(\"Matching Product Types\")}"
                                     }
                                 }
-
                                 div {
-                                    class: "space-y-1.5",
-                                    label { class: "text-xs font-bold text-kr-matrix", "Description" }
-                                    textarea {
-                                        class: "bg-kr-membrane border border-kr-matrix/10 rounded-xl px-4 py-2.5 text-sm w-full h-20 focus:outline-none focus:border-kr-primary text-kr-nucleus resize-none",
-                                        placeholder: "Explain what this category evaluates...",
-                                        value: "{new_description}",
-                                        oninput: move |e| new_description.set(e.value()),
-                                    }
-                                }
-
-                                // Choose from existing criteria
-                                div {
-                                    class: "space-y-2",
-                                    label { class: "text-xs font-bold text-kr-matrix block", "Inherit Existing Criteria" }
-                                    div {
-                                        class: "grid grid-cols-1 md:grid-cols-2 gap-2 bg-kr-membrane p-4 rounded-xl border border-kr-matrix/10 max-h-48 overflow-y-auto",
+                                    class: "grid grid-cols-1 md:grid-cols-2 gap-4",
+                                    for pt in direct_pt_matches.iter() {
                                         {
-                                            let all_existing_criteria = {
-                                                let mut map = HashMap::new();
-                                                for c in categories.read().iter() {
-                                                    for crit in &c.criteria {
-                                                        map.insert(crit.id.clone(), crit.clone());
-                                                    }
-                                                }
-                                                for pt in product_types.read().iter() {
-                                                    for crit in &pt.specific_criteria {
-                                                        map.insert(crit.id.clone(), crit.clone());
-                                                    }
-                                                }
-                                                let mut list: Vec<Criterion> = map.into_values().collect();
-                                                list.sort_by(|a, b| a.name.cmp(&b.name));
-                                                list
-                                            };
-
-                                            all_existing_criteria.into_iter().map(|crit| {
-                                                let is_selected = selected_criteria.read().contains(&crit.id);
-                                                let crit_id_clone = crit.id.clone();
-                                                rsx! {
+                                            let pt = (*pt).clone();
+                                            let pt_id = pt.id.clone();
+                                            rsx! {
+                                                Link {
+                                                    key: "{pt.id}",
+                                                    to: Route::WorkspacePage { id: pt_id },
+                                                    class: "kr-grid-box p-0 overflow-hidden group cursor-pointer hover:border-kr-turquoise transition-all duration-200",
                                                     div {
-                                                        key: "{crit.id}",
-                                                        class: "flex items-start gap-2.5 p-2 rounded-lg hover:bg-kr-cytoplasm cursor-pointer transition-colors text-xs text-kr-nucleus",
-                                                        onclick: move |_| {
-                                                            let mut list = selected_criteria.read().clone();
-                                                            if list.contains(&crit_id_clone) {
-                                                                list.retain(|id| id != &crit_id_clone);
-                                                            } else {
-                                                                list.push(crit_id_clone.clone());
-                                                            }
-                                                            selected_criteria.set(list);
-                                                        },
-                                                        input {
-                                                            type: "checkbox",
-                                                            class: "mt-0.5 accent-kr-primary",
-                                                            checked: is_selected,
-                                                            readonly: true,
+                                                        class: "kr-header-bar bg-kr-text-nucleus/5 flex justify-between items-center",
+                                                        span {
+                                                            class: "flex items-center gap-2",
+                                                            span { "{pt.emoji}" }
+                                                            span { class: "font-bold text-kr-text-nucleus group-hover:text-kr-turquoise transition-colors", "{pt.name}" }
                                                         }
-                                                        div {
-                                                            class: "font-semibold flex items-center gap-1",
-                                                            span { "{crit.emoji}" }
-                                                            span { "{crit.name}" }
+                                                        span {
+                                                            class: "text-[9px] uppercase font-extrabold px-2 py-0.5 border border-kr-text-nucleus text-kr-text-nucleus",
+                                                            "WORKSPACE →"
                                                         }
                                                     }
-                                                }
-                                            })
-                                        }
-                                    }
-                                }
-
-                                // Create & add a custom criteria inline
-                                div {
-                                    class: "space-y-3 border-t border-kr-matrix/10 pt-4",
-                                    label { class: "text-xs font-bold text-kr-matrix block", "Add Custom Criteria" }
-
-                                    // Custom criteria list added so far
-                                    if !custom_criteria.read().is_empty() {
-                                        div {
-                                            class: "space-y-1.5",
-                                            for crit in custom_criteria.read().iter() {
-                                                div {
-                                                    key: "{crit.id}",
-                                                    class: "flex justify-between items-center bg-kr-membrane px-3 py-2 rounded-lg text-xs text-kr-nucleus border border-kr-matrix/5",
                                                     div {
-                                                        class: "flex items-center gap-2",
-                                                        span { "{crit.emoji}" }
-                                                        span { class: "font-bold", "{crit.name}" }
-                                                        span { class: "text-kr-matrix text-[10px]", "- {crit.description}" }
-                                                    }
-                                                    button {
-                                                        class: "text-rose-500 hover:text-rose-700 font-bold",
-                                                        onclick: {
-                                                            let target_id = crit.id.clone();
-                                                            move |_| {
-                                                                custom_criteria.write().retain(|c| c.id != target_id);
-                                                            }
-                                                        },
-                                                        "Remove"
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    // Form fields to add a custom criterion
-                                    div {
-                                        class: "bg-kr-membrane p-4 rounded-xl border border-kr-matrix/10 space-y-3",
-                                        div {
-                                            class: "grid grid-cols-4 gap-3",
-                                            div {
-                                                class: "col-span-1 space-y-1",
-                                                label { class: "text-[10px] font-bold text-kr-matrix", "Emoji" }
-                                                input {
-                                                    class: "bg-kr-cytoplasm border border-kr-matrix/10 rounded-lg px-2.5 py-1.5 text-center text-sm w-full focus:outline-none focus:border-kr-primary text-kr-nucleus",
-                                                    placeholder: "✨",
-                                                    value: "{temp_crit_emoji}",
-                                                    oninput: move |e| temp_crit_emoji.set(e.value()),
-                                                }
-                                            }
-                                            div {
-                                                class: "col-span-3 space-y-1",
-                                                label { class: "text-[10px] font-bold text-kr-matrix", "Criterion Name" }
-                                                input {
-                                                    class: "bg-kr-cytoplasm border border-kr-matrix/10 rounded-lg px-3 py-1.5 text-xs w-full focus:outline-none focus:border-kr-primary text-kr-nucleus font-medium",
-                                                    placeholder: "e.g., Water Conservation",
-                                                    value: "{temp_crit_name}",
-                                                    oninput: move |e| temp_crit_name.set(e.value()),
-                                                }
-                                            }
-                                        }
-                                        div {
-                                            class: "space-y-1",
-                                            label { class: "text-[10px] font-bold text-kr-matrix", "Criterion Description" }
-                                            input {
-                                                class: "bg-kr-cytoplasm border border-kr-matrix/10 rounded-lg px-3 py-1.5 text-xs w-full focus:outline-none focus:border-kr-primary text-kr-nucleus",
-                                                placeholder: "e.g., Gallons of water saved during production...",
-                                                value: "{temp_crit_desc}",
-                                                oninput: move |e| temp_crit_desc.set(e.value()),
-                                            }
-                                        }
-                                        button {
-                                            type: "button",
-                                            class: "px-3 py-1.5 bg-kr-nucleus hover:bg-black text-white text-xs font-bold rounded-lg transition-all active:scale-95 shadow-xs w-full",
-                                            onclick: move |_| {
-                                                let name_val = temp_crit_name.read().trim().to_string();
-                                                let desc_val = temp_crit_desc.read().trim().to_string();
-                                                let emoji_val = temp_crit_emoji.read().trim().to_string();
-                                                if !name_val.is_empty() {
-                                                    let clean_id: String = name_val.to_lowercase()
-                                                        .chars()
-                                                        .map(|c| if c == ' ' { '_' } else { c })
-                                                        .filter(|c| c.is_alphanumeric() || *c == '_')
-                                                        .collect();
-                                                    let final_emoji = if emoji_val.is_empty() { "✨".to_string() } else { emoji_val };
-                                                    let new_crit = Criterion {
-                                                        id: clean_id,
-                                                        name: name_val,
-                                                        description: desc_val,
-                                                        emoji: final_emoji,
-                                                    };
-                                                    custom_criteria.write().push(new_crit);
-                                                    temp_crit_name.set("".to_string());
-                                                    temp_crit_desc.set("".to_string());
-                                                    temp_crit_emoji.set("".to_string());
-                                                }
-                                            },
-                                            "+ Add Custom Criterion"
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Save button
-                            div {
-                                class: "flex justify-end gap-3 border-t border-kr-matrix/10 pt-4",
-                                button {
-                                    class: "px-5 py-2.5 bg-kr-membrane hover:bg-kr-cytoplasm border border-kr-matrix/20 text-kr-nucleus text-xs font-bold rounded-lg transition-all active:scale-95",
-                                    onclick: move |_| {
-                                        creation_mode.set(CreationMode::None);
-                                    },
-                                    "Cancel"
-                                }
-                                button {
-                                    class: "kr-btn-pill px-6 py-2.5 text-white active:scale-95 text-xs shadow-md shadow-kr-primary/10",
-                                    onclick: move |_| {
-                                        let name_val = new_name.read().trim().to_string();
-                                        if !name_val.is_empty() {
-                                            let clean_id: String = name_val.to_lowercase()
-                                                .chars()
-                                                .map(|c| if c == ' ' { '_' } else { c })
-                                                .filter(|c| c.is_alphanumeric() || *c == '_')
-                                                .collect();
-
-                                            // Gather all criteria selected or custom-created
-                                            let mut final_criteria = Vec::new();
-                                            let all_existing_criteria = {
-                                                let mut map = HashMap::new();
-                                                for c in categories.read().iter() {
-                                                    for crit in &c.criteria {
-                                                        map.insert(crit.id.clone(), crit.clone());
-                                                    }
-                                                }
-                                                for pt in product_types.read().iter() {
-                                                    for crit in &pt.specific_criteria {
-                                                        map.insert(crit.id.clone(), crit.clone());
-                                                    }
-                                                }
-                                                map
-                                            };
-                                            for id in selected_criteria.read().iter() {
-                                                if let Some(crit) = all_existing_criteria.get(id) {
-                                                    final_criteria.push(crit.clone());
-                                                }
-                                            }
-                                            final_criteria.extend(custom_criteria.read().clone());
-
-                                            let new_cat = Category {
-                                                id: clean_id,
-                                                name: name_val,
-                                                description: new_description.read().trim().to_string(),
-                                                emoji: new_emoji.read().trim().to_string(),
-                                                criteria: final_criteria,
-                                            };
-
-                                            categories.write().push(new_cat);
-                                            let new_idx = categories.read().len() - 1;
-                                            workspace_mode.set(WorkspaceMode::Category);
-                                            selected_category_idx.set(new_idx);
-                                            search_query.set("".to_string());
-                                            creation_mode.set(CreationMode::None);
-                                        }
-                                    },
-                                    "Save Category"
-                                }
-                            }
-                        }
-                    }
-
-                    if creation_mode() == CreationMode::ProductType {
-                        div {
-                            class: "bg-kr-cytoplasm border border-kr-primary/35 p-6 kr-squarcle shadow-lg space-y-6 animate-fade-in-down",
-                            div {
-                                class: "flex justify-between items-center border-b border-kr-matrix/10 pb-4",
-                                div {
-                                    h3 { class: "font-bold text-kr-nucleus text-lg font-display flex items-center gap-2",
-                                        span { "📦" }
-                                        span { "Create New Product Type" }
-                                    }
-                                    p { class: "text-kr-matrix text-xs mt-0.5", "Establish a product type inheriting from categories." }
-                                }
-                                button {
-                                    class: "text-kr-matrix hover:text-kr-nucleus text-xs font-bold",
-                                    onclick: move |_| {
-                                        creation_mode.set(CreationMode::None);
-                                    },
-                                    "Cancel"
-                                }
-                            }
-
-                            // Form fields
-                            div {
-                                class: "space-y-4",
-
-                                div {
-                                    class: "grid grid-cols-4 gap-4",
-                                    div {
-                                        class: "col-span-1 space-y-1.5",
-                                        label { class: "text-xs font-bold text-kr-matrix", "Emoji" }
-                                        input {
-                                            class: "bg-kr-membrane border border-kr-matrix/10 rounded-xl px-4 py-2.5 text-center text-lg w-full focus:outline-none focus:border-kr-primary text-kr-nucleus",
-                                            value: "{new_emoji}",
-                                            oninput: move |e| new_emoji.set(e.value()),
-                                        }
-                                    }
-                                    div {
-                                        class: "col-span-3 space-y-1.5",
-                                        label { class: "text-xs font-bold text-kr-matrix", "Product Type Name" }
-                                        input {
-                                            class: "bg-kr-membrane border border-kr-matrix/10 rounded-xl px-4 py-2.5 text-sm w-full focus:outline-none focus:border-kr-primary text-kr-nucleus font-medium",
-                                            placeholder: "e.g., Air Purifiers",
-                                            value: "{new_name}",
-                                            oninput: move |e| new_name.set(e.value()),
-                                        }
-                                    }
-                                }
-
-                                div {
-                                    class: "space-y-1.5",
-                                    label { class: "text-xs font-bold text-kr-matrix", "Description" }
-                                    textarea {
-                                        class: "bg-kr-membrane border border-kr-matrix/10 rounded-xl px-4 py-2.5 text-sm w-full h-20 focus:outline-none focus:border-kr-primary text-kr-nucleus resize-none",
-                                        placeholder: "Explain what this product type evaluates...",
-                                        value: "{new_description}",
-                                        oninput: move |e| new_description.set(e.value()),
-                                    }
-                                }
-
-                                // Choose categories (for inheritance of criteria)
-                                div {
-                                    class: "space-y-2",
-                                    label { class: "text-xs font-bold text-kr-matrix block", "Parent Categories (Inherit Criteria)" }
-                                    div {
-                                        class: "grid grid-cols-1 md:grid-cols-2 gap-2 bg-kr-membrane p-4 rounded-xl border border-kr-matrix/10 max-h-40 overflow-y-auto",
-                                        for cat in categories.read().iter() {
-                                            {
-                                                let is_selected = selected_categories.read().contains(&cat.id);
-                                                let cat_id_clone = cat.id.clone();
-                                                rsx! {
-                                                    div {
-                                                        key: "{cat.id}",
-                                                        class: "flex items-start gap-2.5 p-2 rounded-lg hover:bg-kr-cytoplasm cursor-pointer transition-colors text-xs text-kr-nucleus",
-                                                        onclick: move |_| {
-                                                            let mut list = selected_categories.read().clone();
-                                                            if list.contains(&cat_id_clone) {
-                                                                list.retain(|id| id != &cat_id_clone);
-                                                            } else {
-                                                                list.push(cat_id_clone.clone());
-                                                            }
-                                                            selected_categories.set(list);
-                                                        },
-                                                        input {
-                                                            type: "checkbox",
-                                                            class: "mt-0.5 accent-kr-primary",
-                                                            checked: is_selected,
-                                                            readonly: true,
-                                                        }
-                                                        div {
-                                                            class: "font-semibold flex items-center gap-1",
-                                                            span { "{cat.emoji}" }
-                                                            span { "{cat.name}" }
+                                                        class: "p-4",
+                                                        p {
+                                                            class: "font-serif italic text-xs text-kr-text-matrix leading-relaxed line-clamp-2",
+                                                            "{pt.description}"
                                                         }
                                                     }
                                                 }
                                             }
                                         }
                                     }
-                                }
-
-                                // Specific Criteria checkboxes
-                                div {
-                                    class: "space-y-2",
-                                    label { class: "text-xs font-bold text-kr-matrix block", "Include Specific Criteria" }
-                                    div {
-                                        class: "grid grid-cols-1 md:grid-cols-2 gap-2 bg-kr-membrane p-4 rounded-xl border border-kr-matrix/10 max-h-40 overflow-y-auto",
-                                        {
-                                            let all_existing_criteria = {
-                                                let mut map = HashMap::new();
-                                                for c in categories.read().iter() {
-                                                    for crit in &c.criteria {
-                                                        map.insert(crit.id.clone(), crit.clone());
-                                                    }
-                                                }
-                                                for pt in product_types.read().iter() {
-                                                    for crit in &pt.specific_criteria {
-                                                        map.insert(crit.id.clone(), crit.clone());
-                                                    }
-                                                }
-                                                let mut list: Vec<Criterion> = map.into_values().collect();
-                                                list.sort_by(|a, b| a.name.cmp(&b.name));
-                                                list
-                                            };
-
-                                            all_existing_criteria.into_iter().map(|crit| {
-                                                let is_selected = selected_criteria.read().contains(&crit.id);
-                                                let crit_id_clone = crit.id.clone();
-                                                rsx! {
-                                                    div {
-                                                        key: "{crit.id}",
-                                                        class: "flex items-start gap-2.5 p-2 rounded-lg hover:bg-kr-cytoplasm cursor-pointer transition-colors text-xs text-kr-nucleus",
-                                                        onclick: move |_| {
-                                                            let mut list = selected_criteria.read().clone();
-                                                            if list.contains(&crit_id_clone) {
-                                                                list.retain(|id| id != &crit_id_clone);
-                                                            } else {
-                                                                list.push(crit_id_clone.clone());
-                                                            }
-                                                            selected_criteria.set(list);
-                                                        },
-                                                        input {
-                                                            type: "checkbox",
-                                                            class: "mt-0.5 accent-kr-primary",
-                                                            checked: is_selected,
-                                                            readonly: true,
-                                                        }
-                                                        div {
-                                                            class: "font-semibold flex items-center gap-1",
-                                                            span { "{crit.emoji}" }
-                                                            span { "{crit.name}" }
-                                                        }
-                                                    }
-                                                }
-                                            })
-                                        }
-                                    }
-                                }
-
-                                // Create & add a custom criteria inline
-                                div {
-                                    class: "space-y-3 border-t border-kr-matrix/10 pt-4",
-                                    label { class: "text-xs font-bold text-kr-matrix block", "Add Custom Specific Criteria" }
-
-                                    // Custom criteria list added so far
-                                    if !custom_criteria.read().is_empty() {
-                                        div {
-                                            class: "space-y-1.5",
-                                            for crit in custom_criteria.read().iter() {
-                                                div {
-                                                    key: "{crit.id}",
-                                                    class: "flex justify-between items-center bg-kr-membrane px-3 py-2 rounded-lg text-xs text-kr-nucleus border border-kr-matrix/5",
-                                                    div {
-                                                        class: "flex items-center gap-2",
-                                                        span { "{crit.emoji}" }
-                                                        span { class: "font-bold", "{crit.name}" }
-                                                        span { class: "text-kr-matrix text-[10px]", "- {crit.description}" }
-                                                    }
-                                                    button {
-                                                        class: "text-rose-500 hover:text-rose-700 font-bold",
-                                                        onclick: {
-                                                            let target_id = crit.id.clone();
-                                                            move |_| {
-                                                                custom_criteria.write().retain(|c| c.id != target_id);
-                                                            }
-                                                        },
-                                                        "Remove"
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    // Form fields to add a custom specific criterion
-                                    div {
-                                        class: "bg-kr-membrane p-4 rounded-xl border border-kr-matrix/10 space-y-3",
-                                        div {
-                                            class: "grid grid-cols-4 gap-3",
-                                            div {
-                                                class: "col-span-1 space-y-1",
-                                                label { class: "text-[10px] font-bold text-kr-matrix", "Emoji" }
-                                                input {
-                                                    class: "bg-kr-cytoplasm border border-kr-matrix/10 rounded-lg px-2.5 py-1.5 text-center text-sm w-full focus:outline-none focus:border-kr-primary text-kr-nucleus",
-                                                    placeholder: "✨",
-                                                    value: "{temp_crit_emoji}",
-                                                    oninput: move |e| temp_crit_emoji.set(e.value()),
-                                                }
-                                            }
-                                            div {
-                                                class: "col-span-3 space-y-1",
-                                                label { class: "text-[10px] font-bold text-kr-matrix", "Criterion Name" }
-                                                input {
-                                                    class: "bg-kr-cytoplasm border border-kr-matrix/10 rounded-lg px-3 py-1.5 text-xs w-full focus:outline-none focus:border-kr-primary text-kr-nucleus font-medium",
-                                                    placeholder: "e.g., Filtration Efficiency",
-                                                    value: "{temp_crit_name}",
-                                                    oninput: move |e| temp_crit_name.set(e.value()),
-                                                }
-                                            }
-                                        }
-                                        div {
-                                            class: "space-y-1",
-                                            label { class: "text-[10px] font-bold text-kr-matrix", "Criterion Description" }
-                                            input {
-                                                class: "bg-kr-cytoplasm border border-kr-matrix/10 rounded-lg px-3 py-1.5 text-xs w-full focus:outline-none focus:border-kr-primary text-kr-nucleus",
-                                                placeholder: "e.g., HEPA filter capture rate of fine dust particles...",
-                                                value: "{temp_crit_desc}",
-                                                oninput: move |e| temp_crit_desc.set(e.value()),
-                                            }
-                                        }
-                                        button {
-                                            type: "button",
-                                            class: "px-3 py-1.5 bg-kr-nucleus hover:bg-black text-white text-xs font-bold rounded-lg transition-all active:scale-95 shadow-xs w-full",
-                                            onclick: move |_| {
-                                                let name_val = temp_crit_name.read().trim().to_string();
-                                                let desc_val = temp_crit_desc.read().trim().to_string();
-                                                let emoji_val = temp_crit_emoji.read().trim().to_string();
-                                                if !name_val.is_empty() {
-                                                    let clean_id: String = name_val.to_lowercase()
-                                                        .chars()
-                                                        .map(|c| if c == ' ' { '_' } else { c })
-                                                        .filter(|c| c.is_alphanumeric() || *c == '_')
-                                                        .collect();
-                                                    let final_emoji = if emoji_val.is_empty() { "✨".to_string() } else { emoji_val };
-                                                    let new_crit = Criterion {
-                                                        id: clean_id,
-                                                        name: name_val,
-                                                        description: desc_val,
-                                                        emoji: final_emoji,
-                                                    };
-                                                    custom_criteria.write().push(new_crit);
-                                                    temp_crit_name.set("".to_string());
-                                                    temp_crit_desc.set("".to_string());
-                                                    temp_crit_emoji.set("".to_string());
-                                                }
-                                            },
-                                            "+ Add Custom Criterion"
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Save button
-                            div {
-                                class: "flex justify-end gap-3 border-t border-kr-matrix/10 pt-4",
-                                button {
-                                    class: "px-5 py-2.5 bg-kr-membrane hover:bg-kr-cytoplasm border border-kr-matrix/20 text-kr-nucleus text-xs font-bold rounded-lg transition-all active:scale-95",
-                                    onclick: move |_| {
-                                        creation_mode.set(CreationMode::None);
-                                    },
-                                    "Cancel"
-                                }
-                                button {
-                                    class: "kr-btn-pill px-6 py-2.5 text-white active:scale-95 text-xs shadow-md shadow-kr-primary/10",
-                                    onclick: move |_| {
-                                        let name_val = new_name.read().trim().to_string();
-                                        if !name_val.is_empty() {
-                                            let clean_id: String = name_val.to_lowercase()
-                                                .chars()
-                                                .map(|c| if c == ' ' { '_' } else { c })
-                                                .filter(|c| c.is_alphanumeric() || *c == '_')
-                                                .collect();
-
-                                            // Gather specific criteria: selected or custom-created
-                                            let mut final_specific_criteria = Vec::new();
-                                            let all_existing_criteria = {
-                                                let mut map = HashMap::new();
-                                                for c in categories.read().iter() {
-                                                    for crit in &c.criteria {
-                                                        map.insert(crit.id.clone(), crit.clone());
-                                                    }
-                                                }
-                                                for pt in product_types.read().iter() {
-                                                    for crit in &pt.specific_criteria {
-                                                        map.insert(crit.id.clone(), crit.clone());
-                                                    }
-                                                }
-                                                map
-                                            };
-                                            for id in selected_criteria.read().iter() {
-                                                if let Some(crit) = all_existing_criteria.get(id) {
-                                                    final_specific_criteria.push(crit.clone());
-                                                }
-                                            }
-                                            final_specific_criteria.extend(custom_criteria.read().clone());
-
-                                            // Generate initial weight profile map
-                                            let mut weights_map = HashMap::new();
-                                            for cat_id in selected_categories.read().iter() {
-                                                if let Some(cat) = categories.read().iter().find(|c| &c.id == cat_id) {
-                                                    for crit in &cat.criteria {
-                                                        weights_map.insert(crit.id.clone(), 5.0);
-                                                    }
-                                                }
-                                            }
-                                            for crit in &final_specific_criteria {
-                                                weights_map.insert(crit.id.clone(), 5.0);
-                                            }
-
-                                            let default_preset = crate::model::WeightProfile {
-                                                name: "Balanced Default".to_string(),
-                                                weights: weights_map,
-                                            };
-
-                                            let new_pt = ProductType {
-                                                id: clean_id,
-                                                name: name_val,
-                                                description: new_description.read().trim().to_string(),
-                                                emoji: new_emoji.read().trim().to_string(),
-                                                category_ids: selected_categories.read().clone(),
-                                                specific_criteria: final_specific_criteria,
-                                                presets: vec![default_preset],
-                                            };
-
-                                            product_types.write().push(new_pt);
-                                            let new_idx = product_types.read().len() - 1;
-                                            workspace_mode.set(WorkspaceMode::ProductType);
-                                            selected_prod_type_idx.set(new_idx);
-                                            search_query.set("".to_string());
-                                            creation_mode.set(CreationMode::None);
-                                        }
-                                    },
-                                    "Save Product Type"
                                 }
                             }
                         }
                     }
                 }
-            } else {
-                // Tab Selector based on workspace mode
-                    div {
-                        class: "flex flex-wrap border-b border-kr-matrix/10 mb-8 gap-1",
-                        match workspace_mode() {
-                            WorkspaceMode::ProductType => {
-                                rsx! {
-                                    for (idx, pt) in product_types.read().iter().enumerate() {
-                                        {
-                                            let is_active = selected_prod_type_idx() == idx;
-                                            let tab_class = if is_active {
-                                                "border-kr-primary text-kr-primary font-extrabold"
-                                            } else {
-                                                "border-transparent text-kr-matrix hover:text-kr-nucleus hover:border-kr-matrix/30"
-                                            };
-                                            rsx! {
-                                                button {
-                                                    key: "{idx}",
-                                                    class: "px-5 py-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all duration-200 -mb-[2px] {tab_class}",
-                                                    onclick: move |_| {
-                                                        selected_prod_type_idx.set(idx);
-                                                    },
-                                                    span { "{pt.emoji}" }
-                                                    span { "{pt.name}" }
-                                                }
-                                            }
-                                        }
-                                    }
+            }
+        }
+    }
+}
+
+// ==========================================
+// Category Card Component
+// ==========================================
+
+#[component]
+fn CategoryCard(
+    category: Category,
+    product_types: Vec<ProductType>,
+    pt_count: usize,
+    target_id: String,
+) -> Element {
+    let lang = use_context::<Signal<crate::i18n::Language>>();
+
+    // Accent color based on category index (cycle through design system colors)
+    let accent_colors = [
+        "var(--color-kr-turquoise)",
+        "var(--color-kr-sage)",
+        "var(--color-kr-clay)",
+        "var(--color-kr-slate)",
+    ];
+    // Pick a color deterministically from category id
+    let color_idx = category.id.len() % accent_colors.len();
+    let accent_color = accent_colors[color_idx];
+
+    rsx! {
+        Link {
+            to: Route::CategoryPage { id: target_id },
+            class: "kr-grid-box p-0 overflow-hidden group cursor-pointer hover:border-kr-turquoise transition-all duration-200 flex flex-col",
+
+            // Card header with accent bar
+            div {
+                class: "kr-header-bar flex justify-between items-center",
+                style: "background-color: {accent_color}20; border-bottom: 1.5px solid {accent_color}40;",
+                div {
+                    class: "flex items-center gap-2",
+                    span { class: "text-base", "{category.emoji}" }
+                    span {
+                        class: "font-bold text-kr-text-nucleus group-hover:text-kr-turquoise transition-colors uppercase tracking-wide text-xs font-display",
+                        "{lang().tr(&category.name)}"
+                    }
+                }
+                div {
+                    style: "background-color: {accent_color};",
+                    class: "w-2.5 h-2.5 border border-kr-text-nucleus shrink-0"
+                }
+            }
+
+            // Description
+            div {
+                class: "px-5 pt-4 pb-3",
+                p {
+                    class: "font-serif italic text-xs text-kr-text-matrix leading-relaxed line-clamp-2",
+                    "{lang().tr(&category.description)}"
+                }
+            }
+
+            // Divider
+            div { class: "border-t border-kr-text-nucleus/10 mx-5" }
+
+            // Product types vertical list
+            div {
+                class: "px-5 py-3 flex-grow",
+                div {
+                    class: "flex justify-between items-center mb-2",
+                    span {
+                        class: "font-mono text-[10px] uppercase tracking-widest text-kr-text-matrix",
+                        "{lang().t(\"Product Types\")}"
+                    }
+                    span {
+                        class: "font-mono text-[10px] text-kr-turquoise font-bold",
+                        "{pt_count}"
+                    }
+                }
+
+                if product_types.is_empty() {
+                    p {
+                        class: "text-xs text-kr-text-matrix/50 font-serif italic",
+                        "{lang().t(\"No product types yet.\")}"
+                    }
+                } else {
+                    ul {
+                        class: "space-y-1.5",
+                        for pt in product_types.iter().take(5) {
+                            li {
+                                key: "{pt.id}",
+                                class: "flex items-center gap-2 text-xs text-kr-text-matrix group-hover:text-kr-text-nucleus transition-colors",
+                                span {
+                                    class: "text-[11px] shrink-0",
+                                    style: "color: {accent_color};",
+                                    "▸"
                                 }
+                                span { class: "font-medium", "{lang().tr(&pt.name)}" }
                             }
-                            WorkspaceMode::Category => {
-                                rsx! {
-                                    for (idx, cat) in categories.read().iter().enumerate() {
-                                        {
-                                            let is_active = selected_category_idx() == idx;
-                                            let tab_class = if is_active {
-                                                "border-kr-primary text-kr-primary font-extrabold"
-                                            } else {
-                                                "border-transparent text-kr-matrix hover:text-kr-nucleus hover:border-kr-matrix/30"
-                                            };
-                                            rsx! {
-                                                button {
-                                                    key: "{idx}",
-                                                    class: "px-5 py-3 text-sm font-bold flex items-center gap-2 border-b-2 transition-all duration-200 -mb-[2px] {tab_class}",
-                                                    onclick: move |_| {
-                                                        selected_category_idx.set(idx);
-                                                    },
-                                                    span { "{cat.emoji}" }
-                                                    span { "{cat.name}" }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+                        }
+                        if pt_count > 5 {
+                            li {
+                                class: "flex items-center gap-2 text-[10px] text-kr-text-matrix/50 font-mono",
+                                span { "▸" }
+                                span { "+ {pt_count - 5} {lang().t(\"more\")}" }
                             }
                         }
                     }
+                }
+            }
 
-                    // Workspace Layout Grid
-                    div {
-                        class: "grid grid-cols-1 lg:grid-cols-12 gap-8 items-start",
-
-                        // Left Column: Weight Sliders & Presets (5 cols)
-                        div {
-                            class: "lg:col-span-5 space-y-6 lg:sticky lg:top-24",
-
-                            // Selected entity card (Product Type or Category)
-                            div {
-                                class: "bg-kr-cytoplasm border border-kr-matrix/10 p-5 kr-squarcle shadow-sm",
-                                div {
-                                    class: "flex justify-between items-start",
-                                    h2 { class: "text-lg font-bold text-kr-nucleus flex items-center gap-2 font-display",
-                                        span { "{active_emoji}" }
-                                        span { "{active_name}" }
-                                    }
-                                    span {
-                                        class: "text-[10px] uppercase font-extrabold px-2 py-0.5 rounded bg-kr-membrane border border-kr-matrix/10 text-kr-primary",
-                                        match workspace_mode() {
-                                            WorkspaceMode::ProductType => "Product Type",
-                                            WorkspaceMode::Category => "Global Category",
-                                        }
-                                    }
-                                }
-                                p { class: "text-kr-matrix text-xs mt-2.5 leading-relaxed", "{active_desc}" }
-                            }
-
-                            // Presets Selection
-                            if !active_presets.is_empty() {
-                                div {
-                                    class: "bg-kr-cytoplasm border border-kr-matrix/10 p-5 kr-squarcle space-y-3 shadow-sm",
-                                    h3 { class: "text-xs font-bold text-kr-matrix uppercase tracking-widest font-display", "Quick Weight Presets" }
-                                    div {
-                                        class: "flex flex-wrap gap-2",
-                                        for preset in &active_presets {
-                                            {
-                                                let preset = preset.clone();
-                                                rsx! {
-                                                    button {
-                                                        key: "{preset.name}",
-                                                        class: "px-4 py-1.5 bg-kr-membrane hover:bg-kr-cytoplasm border border-kr-matrix/15 hover:border-kr-primary/30 rounded-full text-xs font-semibold text-kr-matrix hover:text-kr-nucleus transition-all active:scale-95",
-                                                        onclick: move |_| {
-                                                            weights.set(preset.weights.clone());
-                                                        },
-                                                        "{preset.name}"
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Sliders Container
-                            div {
-                                class: "space-y-3.5",
-                                div {
-                                    class: "flex justify-between items-center px-1",
-                                    h3 { class: "text-xs font-bold text-kr-matrix uppercase tracking-widest font-display", "Customize Criteria Weight" }
-                                    button {
-                                        class: "text-[10px] text-kr-primary hover:text-kr-primary/80 font-bold",
-                                        onclick: move |_| {
-                                            let mut reset_map = HashMap::new();
-                                            for crit in &active_criteria_for_reset {
-                                                reset_map.insert(crit.id.clone(), 5.0);
-                                            }
-                                            weights.set(reset_map);
-                                        },
-                                        "Reset All to 5.0"
-                                    }
-                                }
-
-                                div {
-                                    class: "space-y-3",
-                                    for criterion in &active_criteria {
-                                        {
-                                            let criterion = criterion.clone();
-                                            let weight_val = weights().get(&criterion.id).copied().unwrap_or(5.0);
-                                            rsx! {
-                                                WeightSlider {
-                                                    key: "{criterion.id}",
-                                                    id: criterion.id.clone(),
-                                                    name: criterion.name.clone(),
-                                                    description: criterion.description.clone(),
-                                                    emoji: criterion.emoji.clone(),
-                                                    weight: weight_val,
-                                                    onchange: move |new_val| {
-                                                        let mut w_map = weights.read().clone();
-                                                        w_map.insert(criterion.id.clone(), new_val);
-                                                        weights.set(w_map);
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                    // Right Column: Ranked Results (7 cols)
-                    div {
-                        class: "lg:col-span-7 space-y-4",
-
-                        div {
-                            class: "flex justify-between items-center px-2",
-                            h3 { class: "text-xs font-bold text-kr-matrix uppercase tracking-widest font-display", "Analytical Ranking" }
-                            div {
-                                class: "flex items-center gap-3",
-                                span { class: "text-xs text-kr-matrix font-semibold", "{sorted_products.len()} Items Sorted" }
-                                if workspace_mode() == WorkspaceMode::ProductType {
-                                    button {
-                                        class: "px-3 py-1 bg-kr-primary hover:bg-kr-primary/90 text-white text-[11px] font-bold rounded-lg transition-all active:scale-95 shadow-sm",
-                                        onclick: move |_| {
-                                            show_add_product_form.set(!show_add_product_form());
-                                        },
-                                        if show_add_product_form() { "Cancel" } else { "+ Add Product" }
-                                    }
-                                }
-                            }
-                        }
-
-                        // Product Creation Form
-                        if show_add_product_form() && workspace_mode() == WorkspaceMode::ProductType {
-                            div {
-                                class: "bg-kr-cytoplasm border border-kr-primary/35 p-6 kr-squarcle shadow-lg space-y-4 animate-fade-in-down",
-                                h4 { class: "font-bold text-kr-nucleus text-base font-display flex items-center gap-2",
-                                    span { "✨" }
-                                    span { "Add Product to {active_name}" }
-                                }
-                                
-                                div {
-                                    class: "grid grid-cols-1 md:grid-cols-2 gap-4",
-                                    div {
-                                        class: "space-y-1.5",
-                                        label { class: "text-xs font-bold text-kr-matrix", "Product Name" }
-                                        input {
-                                            class: "bg-kr-membrane border border-kr-matrix/10 rounded-xl px-4 py-2 text-xs w-full focus:outline-none focus:border-kr-primary text-kr-nucleus font-medium",
-                                            placeholder: "e.g., Fairphone 6",
-                                            value: "{new_product_name}",
-                                            oninput: move |e| new_product_name.set(e.value()),
-                                        }
-                                    }
-                                    div {
-                                        class: "grid grid-cols-3 gap-2",
-                                        div {
-                                            class: "col-span-2 space-y-1.5",
-                                            label { class: "text-xs font-bold text-kr-matrix", "Price ($)" }
-                                            input {
-                                                type: "number",
-                                                step: "0.01",
-                                                min: "0.0",
-                                                class: "bg-kr-membrane border border-kr-matrix/10 rounded-xl px-4 py-2 text-xs w-full focus:outline-none focus:border-kr-primary text-kr-nucleus font-medium",
-                                                placeholder: "e.g., 699.00",
-                                                value: "{new_product_price}",
-                                                oninput: move |e| new_product_price.set(e.value()),
-                                            }
-                                        }
-                                        div {
-                                            class: "col-span-1 space-y-1.5",
-                                            label { class: "text-xs font-bold text-kr-matrix", "Qty" }
-                                            input {
-                                                type: "number",
-                                                step: "0.01",
-                                                min: "0.0",
-                                                class: "bg-kr-membrane border border-kr-matrix/10 rounded-xl px-3 py-2 text-xs w-full focus:outline-none focus:border-kr-primary text-kr-nucleus font-medium",
-                                                placeholder: "e.g., 0.25",
-                                                value: "{new_product_quantity}",
-                                                oninput: move |e| new_product_quantity.set(e.value()),
-                                            }
-                                        }
-                                    }
-                                }
-
-                                div {
-                                    class: "grid grid-cols-1 md:grid-cols-2 gap-4",
-                                    div {
-                                        class: "space-y-1.5",
-                                        label { class: "text-xs font-bold text-kr-matrix", "Unit" }
-                                        select {
-                                            class: "bg-kr-membrane border border-kr-matrix/10 rounded-xl px-4 py-2 text-xs w-full focus:outline-none focus:border-kr-primary text-kr-nucleus font-medium",
-                                            value: "{new_product_unit}",
-                                            onchange: move |e| new_product_unit.set(e.value()),
-                                            option { value: "", "None (per piece)" }
-                                            option { value: "kg", "Kilogram (kg)" }
-                                            option { value: "L", "Liter (L)" }
-                                            option { value: "m", "Meter (m)" }
-                                        }
-                                    }
-                                    div {
-                                        class: "space-y-1.5",
-                                        label { class: "text-xs font-bold text-kr-matrix", "Description" }
-                                        input {
-                                            class: "bg-kr-membrane border border-kr-matrix/10 rounded-xl px-4 py-2 text-xs w-full focus:outline-none focus:border-kr-primary text-kr-nucleus font-medium",
-                                            placeholder: "Brief description of the product...",
-                                            value: "{new_product_description}",
-                                            oninput: move |e| new_product_description.set(e.value()),
-                                        }
-                                    }
-                                }
-
-                                // Sliders to configure criteria scores
-                                div {
-                                    class: "space-y-2 border-t border-kr-matrix/10 pt-4",
-                                    label { class: "text-xs font-bold text-kr-matrix block", "Evaluate Criteria Scores (0 - 10)" }
-                                    div {
-                                        class: "grid grid-cols-1 md:grid-cols-2 gap-4 bg-kr-membrane p-4 rounded-xl border border-kr-matrix/10 max-h-60 overflow-y-auto",
-                                        for crit in &active_criteria_for_sliders {
-                                            {
-                                                let crit = crit.clone();
-                                                let score = new_product_scores.read().get(&crit.id).copied().unwrap_or(5.0);
-                                                rsx! {
-                                                    div {
-                                                        key: "{crit.id}",
-                                                        class: "space-y-1",
-                                                        div {
-                                                            class: "flex justify-between items-center",
-                                                            span { class: "text-xs font-semibold text-kr-nucleus flex items-center gap-1.5",
-                                                                span { "{crit.emoji}" }
-                                                                span { "{crit.name}" }
-                                                            }
-                                                            span { class: "text-xs font-bold text-kr-primary tabular-nums", "{score:.1}" }
-                                                        }
-                                                        input {
-                                                            type: "range",
-                                                            min: "0.0",
-                                                            max: "10.0",
-                                                            step: "0.1",
-                                                            class: "w-full accent-kr-primary h-1 bg-kr-cytoplasm rounded-lg appearance-none cursor-pointer",
-                                                            value: "{score}",
-                                                            oninput: move |e| {
-                                                                if let Ok(val) = e.value().parse::<f64>() {
-                                                                    new_product_scores.write().insert(crit.id.clone(), val);
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // Actions
-                                div {
-                                    class: "flex justify-end gap-3 border-t border-kr-matrix/10 pt-4",
-                                    button {
-                                        class: "px-4 py-2 bg-kr-membrane hover:bg-kr-cytoplasm border border-kr-matrix/20 text-kr-nucleus text-xs font-bold rounded-lg transition-all active:scale-95",
-                                        onclick: move |_| {
-                                            show_add_product_form.set(false);
-                                        },
-                                        "Cancel"
-                                    }
-                                    button {
-                                        class: "kr-btn-pill px-5 py-2 text-white active:scale-95 text-xs shadow-md shadow-kr-primary/10",
-                                        onclick: move |_| {
-                                            let name_val = new_product_name.read().trim().to_string();
-                                            if !name_val.is_empty() {
-                                                let clean_id = name_val.to_lowercase()
-                                                    .chars()
-                                                    .map(|c| if c == ' ' { '-' } else { c })
-                                                    .filter(|c| c.is_alphanumeric() || *c == '-')
-                                                    .collect::<String>();
-
-                                                let price_val = new_product_price.read().parse::<f64>().unwrap_or(0.0);
-                                                let qty_val = new_product_quantity.read().parse::<f64>().ok();
-                                                let unit_val = {
-                                                    let u = new_product_unit.read();
-                                                    if u.is_empty() { None } else { Some(u.clone()) }
-                                                };
-
-                                                let mut final_scores = HashMap::new();
-                                                for crit in &active_criteria_for_save {
-                                                    let score = new_product_scores.read().get(&crit.id).copied().unwrap_or(5.0);
-                                                    final_scores.insert(crit.id.clone(), score);
-                                                }
-
-                                                let pt = &product_types.read()[selected_prod_type_idx()];
-                                                let new_prod = Product {
-                                                    id: clean_id,
-                                                    name: name_val,
-                                                    description: new_product_description.read().trim().to_string(),
-                                                    price: price_val,
-                                                    quantity: qty_val,
-                                                    unit: unit_val,
-                                                    product_type_id: pt.id.clone(),
-                                                    scores: final_scores,
-                                                };
-
-                                                products.write().push(new_prod);
-
-                                                // Reset form
-                                                new_product_name.set("".to_string());
-                                                new_product_price.set("".to_string());
-                                                new_product_quantity.set("".to_string());
-                                                new_product_unit.set("".to_string());
-                                                new_product_description.set("".to_string());
-                                                new_product_scores.write().clear();
-                                                show_add_product_form.set(false);
-                                            }
-                                        },
-                                        "Save Product"
-                                    }
-                                }
-                            }
-                        }
-
-                        div {
-                            class: "space-y-4",
-                            for (idx, product) in sorted_products.iter().enumerate() {
-                                ProductCard {
-                                    key: "{product.id}",
-                                    rank: idx + 1,
-                                    product: product.clone(),
-                                    criteria: active_criteria_for_cards.clone(),
-                                    weights: weights()
-                                }
-                            }
-                        }
-                    }
+            // Footer CTA
+            div {
+                class: "border-t border-kr-text-nucleus/10 px-5 py-3 flex justify-between items-center bg-kr-text-nucleus/3 group-hover:bg-kr-turquoise/5 transition-colors",
+                span {
+                    class: "font-mono text-[10px] uppercase tracking-widest text-kr-text-matrix group-hover:text-kr-turquoise transition-colors",
+                    "{lang().t(\"Explore Category →\")}"
+                }
+                span {
+                    class: "font-mono text-[9px] uppercase text-kr-text-matrix/50",
+                    "{category.criteria.len()} {lang().t(\"criteria\")}"
                 }
             }
         }

@@ -4,13 +4,14 @@ use dioxus::prelude::*;
 #[component]
 pub fn Navbar() -> Element {
     let route = use_route::<Route>();
+    let mut lang = use_context::<Signal<crate::i18n::Language>>();
 
     let home_class = if matches!(route, Route::Home {}) {
         "underline decoration-2 underline-offset-4"
     } else {
         "hover:underline hover:underline-offset-4"
     };
-    let compare_class = if matches!(route, Route::Compare {}) {
+    let compare_class = if matches!(route, Route::Compare {} | Route::CategoryPage { .. } | Route::WorkspacePage { .. }) {
         "underline decoration-2 underline-offset-4"
     } else {
         "hover:underline hover:underline-offset-4"
@@ -71,7 +72,7 @@ pub fn Navbar() -> Element {
                     }
                     span {
                         class: "text-[9px] uppercase font-bold tracking-widest px-2 py-0.5 border border-kr-text-nucleus text-kr-text-nucleus font-display transition-colors group-hover:bg-kr-text-nucleus group-hover:text-kr-bg-membrane",
-                        "Classification Engine"
+                        "{lang().t(\"Classification Engine\")}"
                     }
                 }
 
@@ -84,17 +85,50 @@ pub fn Navbar() -> Element {
                     a {
                         href: "/#phylogeny",
                         class: "text-kr-text-nucleus {home_class}",
-                        "Concepts"
+                        "{lang().t(\"Concepts\")}"
                     }
                     Link {
                         to: Route::Compare {},
                         class: "text-kr-text-nucleus {compare_class}",
-                        "Workspace"
+                        "{lang().t(\"Workspace\")}"
                     }
                     Link {
                         to: Route::About {},
                         class: "text-kr-text-nucleus {about_class}",
-                        "Philosophy"
+                        "{lang().t(\"Philosophy\")}"
+                    }
+
+                    // Language Switcher
+                    {
+                        let en_class = if lang() == crate::i18n::Language::English {
+                            "px-2 py-0.5 transition-colors text-kr-turquoise font-bold"
+                        } else {
+                            "px-2 py-0.5 transition-colors hover:text-kr-nucleus text-kr-text-matrix"
+                        };
+                        let fr_class = if lang() == crate::i18n::Language::French {
+                            "px-2 py-0.5 transition-colors text-kr-turquoise font-bold"
+                        } else {
+                            "px-2 py-0.5 transition-colors hover:text-kr-nucleus text-kr-text-matrix"
+                        };
+                        rsx! {
+                            div {
+                                class: "flex items-center border border-kr-text-nucleus/20 font-mono text-[10px] tracking-normal uppercase shrink-0",
+                                button {
+                                    class: "{en_class}",
+                                    onclick: move |_| lang.set(crate::i18n::Language::English),
+                                    "EN"
+                                }
+                                span {
+                                    class: "text-kr-text-nucleus/30 select-none",
+                                    "|"
+                                }
+                                button {
+                                    class: "{fr_class}",
+                                    onclick: move |_| lang.set(crate::i18n::Language::French),
+                                    "FR"
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -114,16 +148,16 @@ pub fn Navbar() -> Element {
                     class: "max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4",
                     p {
                         class: "tracking-wider uppercase font-bold",
-                        "© 2026 KRYNON. DEVELOPED BY THE HOLOBION ORGANISATION. ALL SYSTEMS INTEGRATED."
+                        "{lang().t(\"© 2026 KRYNON. DEVELOPED BY THE HOLOBION ORGANISATION. ALL SYSTEMS INTEGRATED.\")}"
                     }
                     div {
                         class: "flex gap-6 uppercase font-bold tracking-wider",
-                        Link { to: Route::About {}, class: "hover:underline", "Philosophy" }
+                        Link { to: Route::About {}, class: "hover:underline", "{lang().t(\"Philosophy\")}" }
                         a {
                             href: "https://github.com/Holobion/Krynon",
                             target: "_blank",
                             class: "hover:underline",
-                            "GitHub Archive"
+                            "{lang().t(\"GitHub\")}"
                         }
                     }
                 }

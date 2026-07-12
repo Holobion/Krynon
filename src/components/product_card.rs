@@ -10,6 +10,7 @@ pub fn ProductCard(
     weights: HashMap<String, f64>,
 ) -> Element {
     let mut is_expanded = use_signal(|| false);
+    let lang = use_context::<Signal<crate::i18n::Language>>();
 
     // Calculate score and contribution breakdown based on active weights
     let overall_score = calculate_score(&product, &weights);
@@ -57,10 +58,13 @@ pub fn ProductCard(
     };
 
     let arrow_class = if is_expanded() { "rotate-180" } else { "" };
+    
+    let localized_product_name = lang().tr(&product.name);
+    let localized_product_description = lang().tr(&product.description);
 
     rsx! {
         div {
-            class: "bg-kr-cytoplasm border {card_border} p-5 kr-squarcle transition-all duration-300 hover:scale-[1.005] hover:shadow-md hover:border-kr-primary/30 cursor-pointer relative overflow-hidden group shadow-sm hover:kr-halo",
+            class: "bg-kr-cytoplasm border {card_border} p-5 kr-squarcle transition-all duration-300 hover:scale-[1.005] hover:shadow-md hover:border-kr-turquoise cursor-pointer relative overflow-hidden group shadow-sm hover:kr-halo",
             onclick: move |_| {
                 is_expanded.set(!is_expanded());
             },
@@ -72,24 +76,24 @@ pub fn ProductCard(
                     class: "flex items-start gap-3",
                     // Rank badge
                     span {
-                        class: "flex items-center justify-center w-8 h-8 rounded-lg shrink-0 text-sm tracking-tighter {rank_bg}",
+                        class: "flex items-center justify-center w-8 h-8 rounded-none border border-kr-nucleus shrink-0 text-sm tracking-tighter {rank_bg}",
                         "#{rank}"
                     }
                     div {
-                        h3 { class: "font-bold text-kr-nucleus text-lg group-hover:text-kr-primary transition-colors font-display", "{product.name}" }
+                        h3 { class: "font-bold text-kr-nucleus text-lg group-hover:text-kr-turquoise transition-colors font-display", "{localized_product_name}" }
                         div { class: "flex flex-wrap items-center gap-2 mt-1",
                             span {
-                                class: "px-2 py-0.5 rounded-md text-xs font-extrabold bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 shrink-0",
+                                class: "px-2 py-0.5 rounded-none text-xs font-extrabold bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 shrink-0",
                                 "{formatted_price}"
                             }
                             if let Some(ref unit_price) = unit_price_str {
                                 span {
-                                    class: "text-[10px] font-bold text-kr-matrix bg-kr-membrane px-1.5 py-0.5 rounded-md border border-kr-matrix/10 shrink-0",
+                                    class: "text-[10px] font-bold text-kr-matrix bg-kr-membrane px-1.5 py-0.5 rounded-none border border-kr-matrix/10 shrink-0",
                                     "{unit_price}"
                                 }
                             }
                             span { class: "text-kr-matrix/30 text-xs shrink-0", "|" }
-                            p { class: "text-kr-matrix text-xs line-clamp-1", "{product.description}" }
+                            p { class: "text-kr-matrix text-xs line-clamp-1", "{localized_product_description}" }
                         }
                     }
                 }
@@ -98,16 +102,17 @@ pub fn ProductCard(
                 div {
                     class: "flex flex-col items-end",
                     span {
-                        class: "bg-kr-primary text-white font-extrabold text-lg px-3.5 py-1 rounded-xl border border-kr-primary/20 tabular-nums shadow-sm kr-halo",
+                        style: "background-color: var(--color-kr-turquoise) !important; color: white !important;",
+                        class: "font-extrabold text-lg px-3.5 py-1 border border-kr-text-nucleus tabular-nums shadow-sm",
                         "{rounded_score}"
                     }
-                    span { class: "text-[10px] text-kr-matrix uppercase tracking-widest mt-1", "Score" }
+                    span { class: "text-[10px] text-kr-matrix uppercase tracking-widest mt-1", "{lang().t(\"Score\")}" }
                 }
             }
 
             // Small mini progress bars to show weight proportion visually
             div {
-                class: "flex w-full h-1.5 bg-kr-membrane rounded-full mt-4 overflow-hidden border border-kr-matrix/10",
+                class: "flex w-full h-1.5 bg-kr-membrane rounded-none mt-4 overflow-hidden border border-kr-matrix/10",
                 for criterion in &criteria {
                     {
                         let weight = weights.get(&criterion.id).copied().unwrap_or(5.0);
@@ -132,12 +137,14 @@ pub fn ProductCard(
                             _ => "bg-slate-400",
                         };
 
+                        let localized_crit_name = lang().tr(&criterion.name);
+
                         rsx! {
                             div {
                                 key: "{criterion.id}",
                                 class: "h-full {color} transition-all duration-300",
                                 style: "width: {percentage}%",
-                                title: "{criterion.name}: score {score} x weight {weight}"
+                                title: "{localized_crit_name}: score {score} x weight {weight}"
                             }
                         }
                     }
@@ -154,8 +161,8 @@ pub fn ProductCard(
                     },
 
                     div {
-                        class: "flex items-center gap-3 bg-kr-membrane p-3 kr-squarcle-sm border border-kr-matrix/10 text-xs font-medium text-kr-nucleus",
-                        span { class: "text-kr-matrix", "Market Pricing" }
+                        class: "flex items-center gap-3 bg-kr-membrane p-3 kr-squarcle-sm text-xs font-medium text-kr-nucleus bg-dot-pattern",
+                        span { class: "text-kr-matrix", "{lang().t(\"Market Pricing\")}" }
                         span { class: "font-extrabold text-emerald-600 text-sm", "{formatted_price}" }
                         if let (Some(qty), Some(unit)) = (product.quantity, product.unit.as_ref()) {
                             if qty > 0.0 && !unit.is_empty() {
@@ -171,9 +178,9 @@ pub fn ProductCard(
                         }
                     }
 
-                    p { class: "text-kr-nucleus/90 text-sm leading-relaxed", "{product.description}" }
+                    p { class: "text-kr-nucleus/90 text-sm leading-relaxed", "{localized_product_description}" }
 
-                    h4 { class: "text-xs font-bold text-kr-matrix uppercase tracking-widest mt-4 font-display", "Detailed Criteria Breakdown" }
+                    h4 { class: "text-xs font-bold text-kr-matrix uppercase tracking-widest mt-4 font-display", "{lang().t(\"Detailed Criteria Breakdown\")}" }
 
                     div {
                         class: "grid grid-cols-1 md:grid-cols-2 gap-4 mt-2",
@@ -201,6 +208,8 @@ pub fn ProductCard(
                                     _ => "bg-slate-400",
                                 };
 
+                                let localized_crit_name = lang().tr(&criterion.name);
+
                                 rsx! {
                                     div {
                                         key: "{criterion.id}",
@@ -210,14 +219,14 @@ pub fn ProductCard(
                                             div {
                                                 class: "flex items-center gap-1.5",
                                                 span { class: "text-sm", "{criterion.emoji}" }
-                                                span { class: "text-xs font-semibold text-kr-nucleus", "{criterion.name}" }
+                                                span { class: "text-xs font-semibold text-kr-nucleus", "{localized_crit_name}" }
                                             }
                                             span { class: "text-xs font-bold text-kr-nucleus tabular-nums", "{score} / 10" }
                                         }
 
                                         // Score Bar
                                         div {
-                                            class: "w-full h-1.5 bg-kr-cytoplasm border border-kr-matrix/10 rounded-full mt-2 overflow-hidden",
+                                            class: "w-full h-1.5 bg-kr-cytoplasm border border-kr-matrix/10 rounded-none mt-2 overflow-hidden",
                                             div {
                                                 class: "h-full {color}",
                                                 style: "width: {score_percentage}%"
@@ -225,10 +234,17 @@ pub fn ProductCard(
                                         }
 
                                         // Weight and Contribution Info
-                                        div {
-                                            class: "flex justify-between items-center text-[10px] text-kr-matrix mt-2 font-medium",
-                                            span { "Weight factor: x{weight}" }
-                                            span { class: "text-kr-primary font-bold", "Adds +{contrib_rounded} to score" }
+                                        {
+                                            let weight_label = lang().t("Weight factor: x");
+                                            let adds_label = lang().t("Adds +");
+                                            let score_label = lang().t(" to score");
+                                            rsx! {
+                                                div {
+                                                    class: "flex justify-between items-center text-[10px] text-kr-matrix mt-2 font-medium",
+                                                    span { "{weight_label}{weight}" }
+                                                    span { class: "text-kr-turquoise font-bold", "{adds_label}{contrib_rounded}{score_label}" }
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -242,7 +258,7 @@ pub fn ProductCard(
             div {
                 class: "flex justify-center mt-3",
                 svg {
-                    class: "w-4 h-4 text-kr-matrix group-hover:text-kr-primary transition-all duration-300 {arrow_class}",
+                    class: "w-4 h-4 text-kr-matrix group-hover:text-kr-turquoise transition-all duration-300 {arrow_class}",
                     fill: "none",
                     stroke: "currentColor",
                     view_box: "0 0 24 24",

@@ -219,6 +219,8 @@ fn ConsensusLogo() -> Element {
 
 #[component]
 pub fn Home() -> Element {
+    let lang = use_context::<Signal<crate::i18n::Language>>();
+
     rsx! {
         div {
             class: "pb-24 space-y-24",
@@ -227,42 +229,46 @@ pub fn Home() -> Element {
             // HERO SECTION: Separate criteria. Decide with clarity.
             // ------------------------------------------
             section {
-                class: "max-w-6xl mx-auto px-6 pt-16 md:pt-24",
+                class: "border-b-1.5 border-kr-text-nucleus bg-grid-pattern py-16 md:py-24",
                 div {
-                    class: "grid grid-cols-1 lg:grid-cols-12 gap-12 items-center",
+                    class: "max-w-6xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-12 gap-12 items-center",
 
                     // Left Column: Massive geometric text
                     div {
                         class: "lg:col-span-8 space-y-8 text-left",
                         div {
-                            class: "font-mono text-xs uppercase tracking-widest text-kr-text-matrix border-l-2 border-kr-text-nucleus pl-3 py-1",
-                            "Krynon Scientific Document // Ref. No. 8023-F"
+                            class: "flex items-center gap-3",
+                            div { class: "w-3 h-3 bg-kr-turquoise border border-kr-text-nucleus" } // Turquoise Swiss dot
+                            div {
+                                class: "font-mono text-xs uppercase tracking-widest text-kr-text-nucleus border-l-2 border-kr-text-nucleus pl-3 py-1",
+                                "{lang().t(\"Krynon Scientific Document // Ref. No. 8023-F\")}"
+                            }
                         }
                         h1 {
                             class: "text-5xl md:text-7xl font-black text-kr-text-nucleus tracking-tight leading-none uppercase font-display",
-                            "Separate criteria."
+                            "{lang().t(\"Separate criteria.\")}"
                             br {}
-                            "Decide with clarity."
+                            "{lang().t(\"Decide with clarity.\")}"
                         }
                         p {
                             class: "font-serif italic text-lg md:text-2xl text-kr-text-matrix leading-relaxed max-w-2xl",
-                            "\"Krynon is designed to embody its etymological root—krinein. By separating products into their fundamental components and evaluating them systematically, it empowers users to make objective, data-driven decisions based on their exact priorities.\""
+                            "{lang().t(\"\\\"Krynon is designed to embody its etymological root—krinein. By separating products into their fundamental components and evaluating them systematically, it empowers users to make objective, data-driven decisions based on their exact priorities.\\\"\")}"
                         }
                         
                         // Metadata detail blocks (archival style)
                         div {
                             class: "grid grid-cols-2 sm:grid-cols-3 gap-6 pt-4 font-mono text-[11px] uppercase tracking-wider text-kr-text-nucleus border-t-1.5 border-kr-text-nucleus/20",
                             div {
-                                span { class: "block text-kr-text-matrix", "Engine Status" }
-                                span { class: "font-bold", "Sorting Core Active" }
+                                span { class: "block text-kr-text-matrix", "{lang().t(\"Engine Status\")}" }
+                                span { class: "font-bold text-kr-turquoise", "{lang().t(\"Sorting Core Active\")}" }
                             }
                             div {
-                                span { class: "block text-kr-text-matrix", "Active Matrices" }
-                                span { class: "font-bold", "Inherited Tree Loaded" }
+                                span { class: "block text-kr-text-matrix", "{lang().t(\"Active Matrices\")}" }
+                                span { class: "font-bold", "{lang().t(\"Inherited Tree Loaded\")}" }
                             }
                             div {
-                                span { class: "block text-kr-text-matrix", "Calculation Mode" }
-                                span { class: "font-bold", "Weighted Average" }
+                                span { class: "block text-kr-text-matrix", "{lang().t(\"Calculation Mode\")}" }
+                                span { class: "font-bold", "{lang().t(\"Weighted Average\")}" }
                             }
                         }
                     }
@@ -271,10 +277,10 @@ pub fn Home() -> Element {
                     div {
                         class: "lg:col-span-4 flex justify-center items-center",
                         div {
-                            class: "w-full max-w-sm aspect-square kr-grid-box flex flex-col justify-between items-center text-center",
+                            class: "w-full max-w-sm aspect-square kr-grid-box flex flex-col justify-between items-center text-center bg-dot-pattern-dense",
                             div {
                                 class: "w-full text-left font-mono text-[10px] text-kr-text-matrix border-b border-kr-text-nucleus/20 pb-2 mb-4",
-                                "FIG 01. THE CRITERION // EVALUATION FACET"
+                                "{lang().t(\"FIG 01. THE CRITERION // EVALUATION FACET\")}"
                             }
                             div {
                                 class: "flex-grow flex items-center justify-center py-6",
@@ -282,7 +288,7 @@ pub fn Home() -> Element {
                             }
                             div {
                                 class: "w-full border-t border-kr-text-nucleus/20 pt-3 text-center",
-                                p { class: "font-serif italic text-xs text-kr-text-matrix", "Mathematical separation of independent parameter scores." }
+                                p { class: "font-serif italic text-xs text-kr-text-matrix", "{lang().t(\"Mathematical separation of independent parameter scores.\")}" }
                             }
                         }
                     }
@@ -299,7 +305,7 @@ pub fn Home() -> Element {
                     class: "border-b-1.5 border-kr-text-nucleus pb-3 mb-8 flex justify-between items-end",
                     h2 {
                         class: "text-2xl font-bold tracking-widest uppercase font-display",
-                        "Taxonomy // Core Concepts"
+                        "{lang().t(\"Taxonomy // Core Concepts\")}"
                     }
                     span {
                         class: "font-mono text-xs text-kr-text-matrix hidden sm:inline",
@@ -312,72 +318,88 @@ pub fn Home() -> Element {
 
                     // Criterion Bento Box
                     div {
-                        class: "kr-grid-box flex flex-col justify-between p-0",
-                        div { class: "kr-header-bar bg-kr-text-nucleus/5", "Concept 01 // Criterion" }
+                        class: "kr-grid-box flex flex-col justify-between p-0 overflow-hidden",
                         div {
-                            class: "border-b border-kr-text-nucleus/20 aspect-square flex items-center justify-center p-8 bg-kr-bg-membrane/30",
+                            class: "kr-header-bar bg-kr-text-nucleus/5 flex justify-between items-center",
+                            span { "{lang().t(\"Concept 01 // Criterion\")}" }
+                            div { class: "w-2.5 h-2.5 bg-kr-turquoise border border-kr-text-nucleus" }
+                        }
+                        div {
+                            class: "border-b border-kr-text-nucleus/20 aspect-square flex items-center justify-center p-8 bg-dot-pattern",
                             CriterionLogo {}
                         }
                         div {
-                            class: "p-4 space-y-2",
-                            h3 { class: "font-display text-sm font-bold uppercase tracking-wider", "Criterion" }
+                            class: "p-4 space-y-2 bg-kr-bg-membrane",
+                            h3 { class: "font-display text-sm font-bold uppercase tracking-wider", "{lang().t(\"Criterion\")}" }
                             p {
                                 class: "font-serif italic text-xs text-kr-text-matrix leading-relaxed",
-                                "The fundamental unit of judgment. Separates items into independent, measurable facets rather than merging everything into a single arbitrary score."
+                                "{lang().t(\"The fundamental unit of judgment. Separates items into independent, measurable facets rather than merging everything into a single arbitrary score.\")}"
                             }
                         }
                     }
 
                     // Inheritance Bento Box
                     div {
-                        class: "kr-grid-box flex flex-col justify-between p-0",
-                        div { class: "kr-header-bar bg-kr-text-nucleus/5", "Concept 02 // Inheritance" }
+                        class: "kr-grid-box flex flex-col justify-between p-0 overflow-hidden",
                         div {
-                            class: "border-b border-kr-text-nucleus/20 aspect-square flex items-center justify-center p-8 bg-kr-bg-membrane/30",
+                            class: "kr-header-bar bg-kr-text-nucleus/5 flex justify-between items-center",
+                            span { "{lang().t(\"Concept 02 // Inheritance\")}" }
+                            div { class: "w-2.5 h-2.5 bg-kr-sage border border-kr-text-nucleus" }
+                        }
+                        div {
+                            class: "border-b border-kr-text-nucleus/20 aspect-square flex items-center justify-center p-8 bg-dot-pattern-dense",
                             InheritanceLogo {}
                         }
                         div {
-                            class: "p-4 space-y-2",
-                            h3 { class: "font-display text-sm font-bold uppercase tracking-wider", "Inheritance" }
+                            class: "p-4 space-y-2 bg-kr-bg-membrane",
+                            h3 { class: "font-display text-sm font-bold uppercase tracking-wider", "{lang().t(\"Inheritance\")}" }
                             p {
                                 class: "font-serif italic text-xs text-kr-text-matrix leading-relaxed",
-                                "Hierarchical structure. Criteria are inherited from parent categories down to specific products, allowing unified comparisons at any abstraction level."
+                                "{lang().t(\"Hierarchical structure. Criteria are inherited from parent categories down to specific products, allowing unified comparisons at any abstraction level.\")}"
                             }
                         }
                     }
 
                     // Weighting Bento Box
                     div {
-                        class: "kr-grid-box flex flex-col justify-between p-0",
-                        div { class: "kr-header-bar bg-kr-text-nucleus/5", "Concept 03 // Weighting" }
+                        class: "kr-grid-box flex flex-col justify-between p-0 overflow-hidden",
                         div {
-                            class: "border-b border-kr-text-nucleus/20 aspect-square flex items-center justify-center p-8 bg-kr-bg-membrane/30",
+                            class: "kr-header-bar bg-kr-text-nucleus/5 flex justify-between items-center",
+                            span { "{lang().t(\"Concept 03 // Weighting\")}" }
+                            div { class: "w-2.5 h-2.5 bg-kr-clay border border-kr-text-nucleus" }
+                        }
+                        div {
+                            class: "border-b border-kr-text-nucleus/20 aspect-square flex items-center justify-center p-8 bg-grid-pattern",
                             WeightingLogo {}
                         }
                         div {
-                            class: "p-4 space-y-2",
-                            h3 { class: "font-display text-sm font-bold uppercase tracking-wider", "Weighting" }
+                            class: "p-4 space-y-2 bg-kr-bg-membrane",
+                            h3 { class: "font-display text-sm font-bold uppercase tracking-wider", "{lang().t(\"Weighting\")}" }
                             p {
                                 class: "font-serif italic text-xs text-kr-text-matrix leading-relaxed",
-                                "Subjective scaling. Users define the priority of each criterion in real-time, allowing the engine's sorting calculations to align with individual needs."
+                                "{lang().t(\"Subjective scaling. Users define the priority of each criterion in real-time, allowing the engine's sorting calculations to align with individual needs.\")}"
                             }
                         }
                     }
 
                     // Consensus Bento Box
                     div {
-                        class: "kr-grid-box flex flex-col justify-between p-0",
-                        div { class: "kr-header-bar bg-kr-text-nucleus/5", "Concept 04 // Consensus" }
+                        class: "kr-grid-box flex flex-col justify-between p-0 overflow-hidden",
                         div {
-                            class: "border-b border-kr-text-nucleus/20 aspect-square flex items-center justify-center p-8 bg-kr-bg-membrane/30",
+                            class: "kr-header-bar bg-kr-text-nucleus/5 flex justify-between items-center",
+                            span { "{lang().t(\"Concept 04 // Consensus\")}" }
+                            div { class: "w-2.5 h-2.5 bg-kr-slate border border-kr-text-nucleus" }
+                        }
+                        div {
+                            class: "border-b border-kr-text-nucleus/20 aspect-square flex items-center justify-center p-8 bg-dot-pattern",
                             ConsensusLogo {}
                         }
                         div {
-                            class: "p-4 space-y-2",
-                            h3 { class: "font-display text-sm font-bold uppercase tracking-wider", "Consensus" }
+                            class: "p-4 space-y-2 bg-kr-bg-membrane",
+                            h3 { class: "font-display text-sm font-bold uppercase tracking-wider", "{lang().t(\"Consensus\")}" }
                             p {
                                 class: "font-serif italic text-xs text-kr-text-matrix leading-relaxed",
-                                "The synthesized decision. Evaluates the multi-criteria scores using a weighted average model, outputting the optimal match value."
+                                "{lang().t(\"The synthesized decision. Evaluates the multi-criteria scores using a weighted average model, outputting the optimal match value.\")}"
                             }
                         }
                     }
@@ -394,7 +416,7 @@ pub fn Home() -> Element {
                     class: "border-b-1.5 border-kr-text-nucleus pb-3 mb-8 flex justify-between items-end",
                     h2 {
                         class: "text-2xl font-bold tracking-widest uppercase font-display",
-                        "Engine Repositories // Open Source Components"
+                        "{lang().t(\"Engine Repositories // Open Source Components\")}"
                     }
                     span {
                         class: "font-mono text-xs text-kr-text-matrix hidden sm:inline",
@@ -415,12 +437,12 @@ pub fn Home() -> Element {
                             span { class: "font-mono text-[9px] px-1 border border-kr-text-nucleus bg-kr-membrane/60", "RUST" }
                         }
                         div {
-                            class: "p-6 flex flex-col justify-between flex-grow h-[220px]",
+                            class: "p-6 flex flex-col justify-between flex-grow h-[220px] bg-dot-pattern-dense",
                             div {
                                 class: "space-y-3",
                                 p {
                                     class: "font-serif italic text-sm text-kr-text-nucleus leading-relaxed",
-                                    "The core rust-based classification engine. Orchestrates sorting algorithms, computes weighted score normalization, and manages criteria registries."
+                                    "{lang().t(\"The core rust-based classification engine. Orchestrates sorting algorithms, computes weighted score normalization, and manages criteria registries.\")}"
                                 }
                             }
                             div {
@@ -441,12 +463,12 @@ pub fn Home() -> Element {
                             span { class: "font-mono text-[9px] px-1 border border-kr-text-nucleus bg-kr-membrane/60", "DIOXUS" }
                         }
                         div {
-                            class: "p-6 flex flex-col justify-between flex-grow h-[220px]",
+                            class: "p-6 flex flex-col justify-between flex-grow h-[220px] bg-dot-pattern-dense",
                             div {
                                 class: "space-y-3",
                                 p {
                                     class: "font-serif italic text-sm text-kr-text-nucleus leading-relaxed",
-                                    "The frontend client interface. Implements the high-performance Swiss grid layout, interactive weight sliders, and criteria creation forms."
+                                    "{lang().t(\"The frontend client interface. Implements the high-performance Swiss grid layout, interactive weight sliders, and criteria creation forms.\")}"
                                 }
                             }
                             div {
@@ -467,12 +489,12 @@ pub fn Home() -> Element {
                             span { class: "font-mono text-[9px] px-1 border border-kr-text-nucleus bg-kr-membrane/60", "POSTGRES" }
                         }
                         div {
-                            class: "p-6 flex flex-col justify-between flex-grow h-[220px]",
+                            class: "p-6 flex flex-col justify-between flex-grow h-[220px] bg-dot-pattern-dense",
                             div {
                                 class: "space-y-3",
                                 p {
                                     class: "font-serif italic text-sm text-kr-text-nucleus leading-relaxed",
-                                    "The persistent database layer. Manages product schemas, relational category hierarchies, and criteria definitions using PostgreSQL."
+                                    "{lang().t(\"The persistent database layer. Manages product schemas, relational category hierarchies, and criteria definitions using PostgreSQL.\")}"
                                 }
                             }
                             div {
@@ -491,32 +513,33 @@ pub fn Home() -> Element {
             section {
                 class: "max-w-6xl mx-auto px-6",
                 div {
-                    class: "kr-grid-box p-0 overflow-hidden grid grid-cols-1 md:grid-cols-12 items-stretch",
+                    class: "kr-grid-box p-0 overflow-hidden grid grid-cols-1 md:grid-cols-12 items-stretch bg-grid-pattern",
                     
                     // Left bento cell: Title & Info
                     div {
                         class: "md:col-span-8 p-8 md:p-12 space-y-6 flex flex-col justify-center",
                         div {
                             class: "font-mono text-xs uppercase tracking-widest text-kr-text-matrix border-l-2 border-kr-text-nucleus pl-3 py-0.5",
-                            "Analytical Workspace // Criteria Filter"
+                            "{lang().t(\"Analytical Workspace // Criteria Filter\")}"
                         }
                         h2 {
                             class: "text-3xl md:text-4xl font-bold tracking-tight text-kr-text-nucleus uppercase font-display",
-                            "Execute Criteria-Based Sorting"
+                            "{lang().t(\"Execute Criteria-Based Sorting\")}"
                         }
                         p {
                             class: "font-serif italic text-base text-kr-text-matrix leading-relaxed max-w-xl",
-                            "Initialize the comparison workspace to compute weight matrices, evaluate product fitness scores, and discover the optimal choices."
+                            "{lang().t(\"Initialize the comparison workspace to compute weight matrices, evaluate product fitness scores, and discover the optimal choices.\")}"
                         }
                     }
 
                     // Right bento cell: Navigation Button
                     div {
-                        class: "md:col-span-4 p-8 md:p-12 border-t-1.5 md:border-t-0 md:border-l-1.5 border-kr-text-nucleus flex items-center justify-center bg-kr-text-nucleus/5",
+                        class: "md:col-span-4 p-8 md:p-12 border-t-1.5 md:border-t-0 md:border-l-1.5 border-kr-text-nucleus flex items-center justify-center bg-kr-turquoise/5 bg-dot-pattern-dense",
                         Link {
                             to: Route::Compare {},
-                            class: "kr-btn-pill px-8 py-4 text-center text-sm font-bold w-full uppercase transition-all duration-300",
-                            "Initialize Workspace →"
+                            style: "background-color: var(--color-kr-turquoise) !important; color: white !important;",
+                            class: "kr-btn-pill px-8 py-4 text-center text-sm font-bold w-full uppercase transition-all duration-300 hover:opacity-95",
+                            "{lang().t(\"Initialize Workspace →\")}"
                         }
                     }
                 }

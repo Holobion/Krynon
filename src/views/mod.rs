@@ -6,6 +6,12 @@ pub use home::Home;
 mod compare;
 pub use compare::Compare;
 
+mod category_page;
+pub use category_page::CategoryPage;
+
+mod workspace_page;
+pub use workspace_page::WorkspacePage;
+
 mod about;
 pub use about::About;
 

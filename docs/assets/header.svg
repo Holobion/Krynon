@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 260" width="100%">
+  <style>
+    .bg { fill: #F2F0E9; }
+    .grid-line { stroke: rgba(55, 65, 81, 0.05); stroke-width: 1; }
+    .border { stroke: #374151; }
+    .border-sm { stroke: #374151; stroke-width: 1; }
+    .text-title { fill: #374151; font-family: 'Outfit', 'Inter', system-ui, -apple-system, sans-serif; font-weight: 900; }
+    .text-subtitle { fill: #374151; font-family: 'Courier New', Courier, monospace; font-weight: bold; }
+    .text-desc { fill: #5A6578; font-family: 'Georgia', serif; font-style: italic; }
+    .stipple-dot { fill: #374151; }
+    
+    .accent-turquoise { fill: #43b29d; }
+    .accent-sage { fill: #B4C3B2; }
+    .accent-clay { fill: #D9C5B2; }
+    .accent-slate { fill: #94A3B8; }
+  </style>
+
+  <!-- Background -->
+  <rect width="960" height="260" class="bg" />
+
+  <!-- Technical Grid Pattern -->
+  <path d="M40 0v260 M80 0v260 M120 0v260 M160 0v260 M200 0v260 M240 0v260 M280 0v260 M320 0v260 M360 0v260 M400 0v260 M440 0v260 M480 0v260 M520 0v260 M560 0v260 M600 0v260 M640 0v260 M680 0v260 M720 0v260 M760 0v260 M800 0v260 M840 0v260 M880 0v260 M920 0v260 M0 40h960 M0 80h960 M0 120h960 M0 160h960 M0 200h960 M0 240h960" class="grid-line" fill="none" />
+
+  <!-- Outer Swiss Ink Frame -->
+  <rect x="15" y="15" width="930" height="230" class="border" fill="none" stroke-width="1.5" />
+
+  <!-- Vertical Divider (Bento Grid) -->
+  <line x1="680" y1="15" x2="680" y2="245" class="border" stroke-width="1.5" />
+
+  <!-- Left Content Area -->
+  
+  <!-- Subtitle Tag -->
+  <rect x="35" y="40" width="10" height="10" class="accent-turquoise border-sm" />
+  <text x="52" y="49" class="text-subtitle" font-size="10" letter-spacing="1.5">KRYNON SCIENTIFIC DOCUMENT // REF. NO. 8023-F</text>
+
+  <!-- Big Archival Titles -->
+  <text x="35" y="95" class="text-title" font-size="36" letter-spacing="0.5">SEPARATE CRITERIA.</text>
+  <text x="35" y="135" class="text-title" font-size="36" letter-spacing="0.5">DECIDE WITH CLARITY.</text>
+
+  <!-- Dashed Technical Line -->
+  <line x1="35" y1="155" x2="645" y2="155" class="border" stroke-width="1.5" stroke-dasharray="4,4" />
+
+  <!-- Description -->
+  <text x="35" y="180" class="text-desc" font-size="14">An open-source analytical engine by Holobion that evaluates products</text>
+  <text x="35" y="200" class="text-desc" font-size="14">against detailed, custom-weighted criteria sets.</text>
+
+  <!-- Taxonomy Accents Legend -->
+  <!-- Criterion -->
+  <rect x="35" y="222" width="8" height="8" class="accent-turquoise border-sm" />
+  <text x="48" y="229" class="text-subtitle" font-size="9" letter-spacing="1">CRITERION</text>
+
+  <!-- Inheritance -->
+  <rect x="165" y="222" width="8" height="8" class="accent-sage border-sm" />
+  <text x="178" y="229" class="text-subtitle" font-size="9" letter-spacing="1">INHERITANCE</text>
+
+  <!-- Weighting -->
+  <rect x="305" y="222" width="8" height="8" class="accent-clay border-sm" />
+  <text x="318" y="229" class="text-subtitle" font-size="9" letter-spacing="1">WEIGHTING</text>
+
+  <!-- Consensus -->
+  <rect x="435" y="222" width="8" height="8" class="accent-slate border-sm" />
+  <text x="448" y="229" class="text-subtitle" font-size="9" letter-spacing="1">CONSENSUS</text>
+
+
+  <!-- Right Graphic Area (Bento Cell) -->
+  
+  <!-- Bento Header divider -->
+  <line x1="680" y1="55" x2="945" y2="55" class="border" stroke-width="1.5" />
+  <text x="695" y="40" class="text-subtitle" font-size="10" letter-spacing="1">FIG 01 // CRITERION</text>
+
+  <!-- Stippled Criterion Logo Cluster (Centered inside cell) -->
+  <g transform="translate(712.5, 75) scale(1.5)" class="stipple-dot">
+    <!-- Left cluster (Separated facet A) -->
+    <circle cx="35" cy="50" r="4.5" />
+    <circle cx="30" cy="45" r="3.2" />
+    <circle cx="40" cy="42" r="2.8" />
+    <circle cx="32" cy="55" r="2.5" />
+    <circle cx="38" cy="58" r="2.2" />
+    <circle cx="25" cy="50" r="1.8" />
+    <circle cx="45" cy="50" r="1.5" />
+    <circle cx="28" cy="40" r="1.4" />
+    <circle cx="42" cy="62" r="1.3" />
+    
+    <!-- Right cluster (Separated facet B) -->
+    <circle cx="65" cy="50" r="4.5" />
+    <circle cx="70" cy="55" r="3.2" />
+    <circle cx="60" cy="58" r="2.8" />
+    <circle cx="68" cy="45" r="2.5" />
+    <circle cx="62" cy="42" r="2.2" />
+    <circle cx="75" cy="50" r="1.8" />
+    <circle cx="55" cy="50" r="1.5" />
+    <circle cx="72" cy="60" r="1.4" />
+    <circle cx="58" cy="38" r="1.3" />
+    
+    <!-- Scattered dots -->
+    <circle cx="50" cy="30" r="0.8" />
+    <circle cx="50" cy="70" r="0.8" />
+    <circle cx="48" cy="20" r="0.6" />
+    <circle cx="52" cy="80" r="0.6" />
+  </g>
+</svg>

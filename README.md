@@ -1,6 +1,11 @@
+<p align="center">
+  <img src="docs/assets/header.svg" alt="Krynon Banner" width="100%">
+</p>
+
 # Krynon
 
 An open-source analytical classification engine owned and maintained by the [Holobion](https://github.com/Holobion) organisation.
+
 
 ## What is Krynon?
 

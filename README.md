@@ -1,6 +1,6 @@
 # Krynon
 
-An open-source analytical classification engine from the [Holobion](https://github.com/Holobion) organisation.
+An open-source analytical classification engine owned and maintained by the [Holobion](https://github.com/Holobion) organisation.
 
 ## What is Krynon?
 
@@ -46,43 +46,58 @@ The name is derived from the ancient Greek verb *krinein*, meaning "to separate,
     Run the following command to start the PostgreSQL container:
 
     ```bash
-    docker-compose up -d db
+    docker compose up -d postgres
     ```
 
-    This will create a PostgreSQL database instance. You may need to run migrations to set up the schema.
-
-4. **Run migrations:**
-    Apply the database migrations to set up the schema:
-
-    ```bash
-    cargo migrate
-    ```
-
-    *(Note: Ensure `cargo-migrate` is installed or adjust command as needed)*
+    This will create a PostgreSQL database instance. Migrations are automatically run by the application on startup.
 
 ### Running the Project
 
-To run the Dioxus application:
+#### 1. Local Development (Native)
+
+To run the Dioxus application natively on your host machine:
 
 ```bash
-cargo run
+dx serve
 ```
 
-This command will build and start the development server.
+This will run the fullstack application in development mode (with hot reloading enabled).
 
-Using the Dioxus CLI, you can also serve the application for different platforms. The default platform is `web`.
+#### 2. Local Development (Docker Containerized)
 
-Run the following command in the root of the project to start developing with the default platform:
+To run the entire application stack (the app and the database) inside Docker with full support for file watching and automatic reloading (hot-reloading):
 
 ```bash
-dx serve --platform web
+docker compose -f docker-compose.dev.yaml up --watch --build
 ```
 
-To run for a different platform, use the `--platform platform` flag. E.g.
+- `--watch`: Enables Docker Compose Watch. Whenever you save a file on the host machine, it is synced to the container, triggering Dioxus CLI (`dx serve`) inside the container to hot-reload or rebuild the application instantly.
+- `--build`: Rebuilds the container images if the Dockerfile configuration has changed.
 
-```bash
-dx serve --platform desktop
-```
+The application will be served at `http://localhost:8080`.
+
+#### 3. Production Deployment
+
+For production deployments, the application is packaged using a multi-stage Docker build (`Dockerfile`) that compiles a highly-optimized release version of the Rust Axum server and compiles client assets to WASM.
+
+To deploy the production stack:
+
+1. **Configure Environment Variables**: Ensure your `.env` contains production-safe credentials:
+   - `POSTGRES_USER`
+   - `POSTGRES_PASSWORD`
+   - `POSTGRES_DB`
+   - `APP_PORT`
+
+2. **Run the production containers**:
+   ```bash
+   docker compose up -d --build
+   ```
+   This will build the optimized production image using `Dockerfile` and start both the application container and the PostgreSQL database container in the background.
+
+3. **Monitor Logs**:
+   ```bash
+   docker compose logs -f
+   ```
 
 ## Project Structure
 
@@ -106,3 +121,11 @@ dx serve --platform desktop
 
 This project is licensed under the Mozilla Public License 2.0.  
 See the [LICENSE](LICENSE) file for details.
+
+## Tech Stack
+
+- [Rust](https://www.rust-lang.org/): Core logic and backend
+- [Dioxus](https://dioxuslabs.com/): Frontend framework
+- [PostgreSQL](https://www.postgresql.org/): Database
+- [SQLx](https://github.com/launchbadge/sqlx): Async SQL Toolkit / ORM
+- [Docker](https://www.docker.com/): Containerization

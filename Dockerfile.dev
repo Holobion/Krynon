@@ -1,0 +1,43 @@
+# Development Dockerfile
+FROM ubuntu:24.04
+
+# Prevent interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    build-essential \
+    pkg-config \
+    libssl-dev \
+    libpq-dev \
+    git \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Rust toolchain
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# Add the wasm32 compilation target
+RUN rustup target add wasm32-unknown-unknown
+
+# Install Dioxus CLI
+RUN curl -sSL https://dioxus.dev/install.sh | bash
+
+# Set the working directory
+WORKDIR /app
+
+# Enable SQLx offline mode so compilation doesn't require a live database connection
+ENV SQLX_OFFLINE=true
+
+# Copy the project files
+COPY . .
+
+# Expose the application port (dx serve default)
+EXPOSE 8080
+
+# Run the development server
+# We bind to 0.0.0.0 so the application is accessible outside the container.
+# We set --open to false to prevent the CLI from attempting to open a browser window inside the container.
+CMD ["dx", "serve", "--addr", "0.0.0.0", "--open", "false"]

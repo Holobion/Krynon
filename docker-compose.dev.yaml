@@ -1,0 +1,57 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: krynon-postgres-dev
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata-dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: krynon-app-dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      - IP=0.0.0.0
+      - PORT=8080
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    volumes:
+      # Volumes for cargo and compilation caches to optimize rebuild times
+      - cargo-cache:/root/.cargo/registry
+      - cargo-git:/root/.cargo/git
+      - dev-target:/app/target
+    develop:
+      watch:
+        # Sync all source files and assets to trigger fast rebuilding/hot-reloading via dx serve
+        - action: sync
+          path: .
+          target: /app
+          ignore:
+            - target/
+            - .git/
+            - .sqlx/
+            - Dockerfile
+            - Dockerfile.dev
+            - docker-compose.yml
+            - docker-compose.dev.yaml
+
+volumes:
+  pgdata-dev:
+  cargo-cache:
+  cargo-git:
+  dev-target:

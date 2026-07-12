@@ -1,4 +1,4 @@
-use crate::model::{calculate_score, Criterion, Product};
+use crate::model::{calculate_score, tr_description, tr_name, Criterion, Product};
 use dioxus::prelude::*;
 use std::collections::HashMap;
 
@@ -11,6 +11,9 @@ pub fn ProductCard(
 ) -> Element {
     let mut is_expanded = use_signal(|| false);
     let lang = use_context::<Signal<crate::i18n::Language>>();
+    let default_locale = use_context::<Signal<String>>();
+    let active = lang().as_code().to_string();
+    let default_locale_val = default_locale();
 
     // Calculate score and contribution breakdown based on active weights
     let overall_score = calculate_score(&product, &weights);
@@ -58,9 +61,10 @@ pub fn ProductCard(
     };
 
     let arrow_class = if is_expanded() { "rotate-180" } else { "" };
-    
-    let localized_product_name = lang().tr(&product.name);
-    let localized_product_description = lang().tr(&product.description);
+
+    let localized_product_name = tr_name(&product.translations, &active, &default_locale_val);
+    let localized_product_description =
+        tr_description(&product.translations, &active, &default_locale_val);
 
     rsx! {
         div {
@@ -137,7 +141,8 @@ pub fn ProductCard(
                             _ => "bg-slate-400",
                         };
 
-                        let localized_crit_name = lang().tr(&criterion.name);
+                        let localized_crit_name =
+                            tr_name(&criterion.translations, &active, &default_locale_val);
 
                         rsx! {
                             div {
@@ -208,7 +213,8 @@ pub fn ProductCard(
                                     _ => "bg-slate-400",
                                 };
 
-                                let localized_crit_name = lang().tr(&criterion.name);
+                                let localized_crit_name =
+                                    tr_name(&criterion.translations, &active, &default_locale_val);
 
                                 rsx! {
                                     div {

@@ -7,7 +7,7 @@ pub fn About() -> Element {
 
     rsx! {
         div {
-            class: "max-w-4xl mx-auto px-6 py-12 space-y-12",
+            class: "max-w-6xl mx-auto px-6 py-12 space-y-12",
 
             // Section 1: The Etymology of Krinein
             div {

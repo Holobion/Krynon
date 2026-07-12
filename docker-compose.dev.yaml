@@ -35,9 +35,22 @@ services:
       - cargo-cache:/root/.cargo/registry
       - cargo-git:/root/.cargo/git
       - dev-target:/app/target
+      # Mount the host's migrations directory so sqlx::migrate! always reads
+      # the latest files. The bind mount overrides the COPY baked into the image,
+      # so editing migrations does not require a rebuild (`--build`). The watch
+      # rule below still ignores `migrations/` to avoid the file-sync action
+      # overwriting the mount with a stale snapshot on each save.
+      - ./migrations:/app/migrations:ro
     develop:
       watch:
-        # Sync all source files and assets to trigger fast rebuilding/hot-reloading via dx serve
+        # Sync source files and assets to trigger fast rebuilding/hot-reloading via dx serve.
+        # We explicitly ignore `migrations/` so the file-sync does not overwrite
+        # the bind mount. sqlx::migrate! records a SHA-256 checksum of each
+        # migration file the first time it runs; if the file content changes
+        # between runs, the next start panics with VersionMismatch. To recover,
+        # drop the database volume and restart:
+        #   docker compose -f docker-compose.dev.yaml down -v
+        #   docker compose -f docker-compose.dev.yaml up --watch
         - action: sync
           path: .
           target: /app
@@ -45,10 +58,27 @@ services:
             - target/
             - .git/
             - .sqlx/
+            - migrations/
             - Dockerfile
             - Dockerfile.dev
             - docker-compose.yml
             - docker-compose.dev.yaml
+
+  # Web UI for inspecting and managing the PostgreSQL database.
+  # Default login: System = PostgreSQL, Server = postgres, Username/Password = .env values.
+  adminer:
+    image: adminer:latest
+    container_name: krynon-adminer-dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+      ADMINER_DESIGN: pepa-linha-dark
+    ports:
+      - "${ADMINER_PORT:-8081}:8080"
+    restart: unless-stopped
+
 
 volumes:
   pgdata-dev:

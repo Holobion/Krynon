@@ -47,8 +47,38 @@ fn App() -> Element {
     let search_query = use_signal(|| "".to_string());
     use_context_provider(|| search_query);
 
+    // UI language selection (used for static UI labels and the active locale
+    // when resolving translation maps).
     let language = use_signal(|| i18n::Language::English);
     use_context_provider(|| language);
+
+    // BCP 47 locale strings (database-backed). The default locale is used as
+    // the fallback when an entity is missing a translation for the active
+    // language.
+    let mut default_locale = use_signal(|| "en".to_string());
+    use_context_provider(|| default_locale);
+    let mut enabled_locales = use_signal(Vec::<String>::new);
+    use_context_provider(|| enabled_locales);
+
+    // Load locale settings on mount.
+    let locale_settings = use_resource(|| async { model::get_supported_languages().await });
+    use_effect(move || {
+        if let Some(Ok(list)) = locale_settings() {
+            let mut new_default = "en".to_string();
+            for lang in &list {
+                if lang.is_default {
+                    new_default = lang.code.clone();
+                }
+            }
+            default_locale.set(new_default);
+            let enabled: Vec<String> = list
+                .into_iter()
+                .filter(|l| l.is_enabled)
+                .map(|l| l.code)
+                .collect();
+            enabled_locales.set(enabled);
+        }
+    });
 
     rsx! {
         // Inject favicon and Tailwind CSS stylesheet into the head

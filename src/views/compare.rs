@@ -1,6 +1,7 @@
 use crate::model::{
     create_category, create_product, create_product_type, get_combined_criteria, load_app_data,
-    AppData, Category, NewCategoryInput, NewProductInput, NewProductTypeInput, ProductType,
+    tr_description, tr_name, AppData, Category, NewCategoryInput, NewProductInput,
+    NewProductTypeInput, ProductType, TranslationEntry,
 };
 use crate::Route;
 use dioxus::prelude::*;
@@ -13,6 +14,7 @@ use std::collections::HashMap;
 #[component]
 pub fn Compare() -> Element {
     let lang = use_context::<Signal<crate::i18n::Language>>();
+    let default_locale = use_context::<Signal<String>>();
     let mut search_query = use_context::<Signal<String>>();
     let mut show_create_product_modal = use_signal(|| false);
     let mut refresh_token = use_signal(|| 0_u64);
@@ -128,6 +130,8 @@ pub fn Compare() -> Element {
                     }
                 },
                 Some(Ok(app_data)) => {
+                    let active = lang().as_code().to_string();
+                    let default_locale_val = default_locale();
                     let categories = app_data.categories.clone();
                     let product_types = app_data.product_types.clone();
 
@@ -136,21 +140,31 @@ pub fn Compare() -> Element {
                         categories.clone()
                     } else {
                         categories.iter().filter(|cat| {
-                            cat.name.to_lowercase().contains(&query_str)
-                                || cat.description.to_lowercase().contains(&query_str)
+                            tr_name(&cat.translations, &active, &default_locale_val)
+                                .to_lowercase()
+                                .contains(&query_str)
+                                || tr_description(&cat.translations, &active, &default_locale_val)
+                                    .to_lowercase()
+                                    .contains(&query_str)
                                 || product_types.iter()
                                     .filter(|pt| pt.category_ids.contains(&cat.id))
-                                    .any(|pt| pt.name.to_lowercase().contains(&query_str))
+                                    .any(|pt| tr_name(&pt.translations, &active, &default_locale_val)
+                                        .to_lowercase()
+                                        .contains(&query_str))
                         }).cloned().collect()
                     };
 
                     // Also find product types that match directly but whose category isn't listed
-                    let direct_pt_matches: Vec<&ProductType> = if !query_str.is_empty() {
+                    let direct_pt_matches: Vec<ProductType> = if !query_str.is_empty() {
                         product_types.iter().filter(|pt| {
-                            (pt.name.to_lowercase().contains(&query_str)
-                                || pt.description.to_lowercase().contains(&query_str))
+                            (tr_name(&pt.translations, &active, &default_locale_val)
+                                .to_lowercase()
+                                .contains(&query_str)
+                                || tr_description(&pt.translations, &active, &default_locale_val)
+                                    .to_lowercase()
+                                    .contains(&query_str))
                                 && !filtered_categories.iter().any(|cat| pt.category_ids.contains(&cat.id))
-                        }).collect()
+                        }).cloned().collect()
                     } else {
                         Vec::new()
                     };
@@ -243,7 +257,9 @@ pub fn Compare() -> Element {
                                                         span {
                                                             class: "flex items-center gap-2",
                                                             span { "{pt.emoji}" }
-                                                            span { class: "font-bold text-kr-text-nucleus group-hover:text-kr-turquoise transition-colors", "{pt.name}" }
+                                                            span { class: "font-bold text-kr-text-nucleus group-hover:text-kr-turquoise transition-colors",
+                                                                "{tr_name(&pt.translations, &active, &default_locale_val)}"
+                                                            }
                                                         }
                                                         span {
                                                             class: "text-[9px] uppercase font-extrabold px-2 py-0.5 border border-kr-text-nucleus text-kr-text-nucleus",
@@ -254,7 +270,7 @@ pub fn Compare() -> Element {
                                                         class: "p-4",
                                                         p {
                                                             class: "font-serif italic text-xs text-kr-text-matrix leading-relaxed line-clamp-2",
-                                                            "{pt.description}"
+                                                            "{tr_description(&pt.translations, &active, &default_locale_val)}"
                                                         }
                                                     }
                                                 }
@@ -294,6 +310,9 @@ fn CategoryCard(
     target_id: String,
 ) -> Element {
     let lang = use_context::<Signal<crate::i18n::Language>>();
+    let default_locale = use_context::<Signal<String>>();
+    let active = lang().as_code().to_string();
+    let default_locale_val = default_locale();
 
     // Accent color based on category index (cycle through design system colors)
     let accent_colors = [
@@ -320,7 +339,7 @@ fn CategoryCard(
                     span { class: "text-base", "{category.emoji}" }
                     span {
                         class: "font-bold text-kr-text-nucleus group-hover:text-kr-turquoise transition-colors uppercase tracking-wide text-xs font-display",
-                        "{lang().tr(&category.name)}"
+                        "{tr_name(&category.translations, &active, &default_locale_val)}"
                     }
                 }
                 div {
@@ -334,7 +353,7 @@ fn CategoryCard(
                 class: "px-5 pt-4 pb-3",
                 p {
                     class: "font-serif italic text-xs text-kr-text-matrix leading-relaxed line-clamp-2",
-                    "{lang().tr(&category.description)}"
+                    "{tr_description(&category.translations, &active, &default_locale_val)}"
                 }
             }
 
@@ -373,7 +392,9 @@ fn CategoryCard(
                                     style: "color: {accent_color};",
                                     "▸"
                                 }
-                                span { class: "font-medium", "{lang().tr(&pt.name)}" }
+                                span { class: "font-medium",
+                                    "{tr_name(&pt.translations, &active, &default_locale_val)}"
+                                }
                             }
                         }
                         if pt_count > 5 {
@@ -414,6 +435,10 @@ fn CreateProductModal(
     on_saved: EventHandler<()>,
 ) -> Element {
     let lang = use_context::<Signal<crate::i18n::Language>>();
+    let default_locale = use_context::<Signal<String>>();
+
+    let active_locale = lang().as_code().to_string();
+    let default_locale_val = default_locale();
 
     let default_product_type_id = app_data
         .product_types
@@ -460,8 +485,12 @@ fn CreateProductModal(
             .categories
             .iter()
             .filter(|category| {
-                category.name.to_lowercase().contains(&category_query)
-                    || category.description.to_lowercase().contains(&category_query)
+                tr_name(&category.translations, &active_locale, &default_locale_val)
+                    .to_lowercase()
+                    .contains(&category_query)
+                    || tr_description(&category.translations, &active_locale, &default_locale_val)
+                        .to_lowercase()
+                        .contains(&category_query)
             })
             .cloned()
             .collect()
@@ -474,8 +503,16 @@ fn CreateProductModal(
             .product_types
             .iter()
             .filter(|product_type| {
-                product_type.name.to_lowercase().contains(&product_type_query)
-                    || product_type.description.to_lowercase().contains(&product_type_query)
+                tr_name(&product_type.translations, &active_locale, &default_locale_val)
+                    .to_lowercase()
+                    .contains(&product_type_query)
+                    || tr_description(
+                        &product_type.translations,
+                        &active_locale,
+                        &default_locale_val,
+                    )
+                    .to_lowercase()
+                    .contains(&product_type_query)
             })
             .cloned()
             .collect()
@@ -487,12 +524,23 @@ fn CreateProductModal(
         .find(|pt| pt.id == selected_product_type_id())
         .cloned();
 
+    // Build a preview ProductType for "create new product type" using translations
+    // (we don't use a literal name/description; the form fields are kept separately).
     let active_criteria_product_type = if create_new_product_type() {
+        let new_name = new_product_type_name.read().trim().to_string();
+        let new_desc = new_product_type_description.read().trim().to_string();
+        let mut translations = std::collections::HashMap::new();
+        translations.insert(
+            active_locale.clone(),
+            crate::model::LocalizedText {
+                name: new_name,
+                description: if new_desc.is_empty() { None } else { Some(new_desc) },
+            },
+        );
         ProductType {
             id: "__preview__".to_string(),
-            name: new_product_type_name.read().trim().to_string(),
-            description: new_product_type_description.read().trim().to_string(),
             emoji: new_product_type_emoji.read().clone(),
+            translations,
             category_ids: selected_category_ids.read().clone(),
             specific_criteria: Vec::new(),
             presets: Vec::new(),
@@ -500,9 +548,8 @@ fn CreateProductModal(
     } else {
         selected_product_type.clone().unwrap_or_else(|| ProductType {
             id: "__preview__".to_string(),
-            name: String::new(),
-            description: String::new(),
             emoji: "📦".to_string(),
+            translations: std::collections::HashMap::new(),
             category_ids: Vec::new(),
             specific_criteria: Vec::new(),
             presets: Vec::new(),
@@ -591,8 +638,12 @@ fn CreateProductModal(
                                                 span { class: "text-lg", "{category.emoji}" }
                                                 div {
                                                     class: "min-w-0",
-                                                    span { class: "block font-medium", "{lang().tr(&category.name)}" }
-                                                    p { class: "text-[11px] text-kr-text-matrix font-serif italic line-clamp-1", "{lang().tr(&category.description)}" }
+                                                    span { class: "block font-medium",
+                                                        "{tr_name(&category.translations, &active_locale, &default_locale_val)}"
+                                                    }
+                                                    p { class: "text-[11px] text-kr-text-matrix font-serif italic line-clamp-1",
+                                                        "{tr_description(&category.translations, &active_locale, &default_locale_val)}"
+                                                    }
                                                 }
                                             }
                                         }
@@ -689,8 +740,12 @@ fn CreateProductModal(
                                                 span { class: "text-lg", "{product_type.emoji}" }
                                                 div {
                                                     class: "min-w-0",
-                                                    span { class: "block font-medium", "{lang().tr(&product_type.name)}" }
-                                                    p { class: "text-[11px] text-kr-text-matrix font-serif italic line-clamp-1", "{lang().tr(&product_type.description)}" }
+                                                    span { class: "block font-medium",
+                                                        "{tr_name(&product_type.translations, &active_locale, &default_locale_val)}"
+                                                    }
+                                                    p { class: "text-[11px] text-kr-text-matrix font-serif italic line-clamp-1",
+                                                        "{tr_description(&product_type.translations, &active_locale, &default_locale_val)}"
+                                                    }
                                                 }
                                             }
                                         }
@@ -788,6 +843,10 @@ fn CreateProductModal(
                                 value: "{new_product_description}",
                                 oninput: move |e| new_product_description.set(e.value()),
                             }
+                            p {
+                                class: "text-[10px] text-kr-text-matrix font-serif italic",
+                                "{lang().t(\"Adding product in\")} {active_locale}"
+                            }
                         }
 
                         if let Some(error) = error_message.read().as_ref() {
@@ -810,6 +869,7 @@ fn CreateProductModal(
                                 onclick: move |_| {
                                     let categories = app_data.categories.clone();
                                     let product_types = app_data.product_types.clone();
+                                    let active_locale = active_locale.clone();
                                     async move {
                                         error_message.set(None);
 
@@ -822,10 +882,20 @@ fn CreateProductModal(
                                                 return;
                                             }
 
-                                            let created_category = match create_category(NewCategoryInput {
+                                            let category_desc = new_category_description.read().trim().to_string();
+                                            let translations = vec![TranslationEntry {
+                                                locale: active_locale.clone(),
                                                 name: category_name,
-                                                description: new_category_description.read().trim().to_string(),
+                                                description: if category_desc.is_empty() {
+                                                    None
+                                                } else {
+                                                    Some(category_desc)
+                                                },
+                                            }];
+
+                                            let created_category = match create_category(NewCategoryInput {
                                                 emoji: new_category_emoji.read().trim().to_string(),
+                                                translations,
                                             }).await {
                                                 Ok(category) => category,
                                                 Err(err) => {
@@ -848,10 +918,20 @@ fn CreateProductModal(
                                                 return;
                                             }
 
-                                            match create_product_type(NewProductTypeInput {
+                                            let pt_desc = new_product_type_description.read().trim().to_string();
+                                            let pt_translations = vec![TranslationEntry {
+                                                locale: active_locale.clone(),
                                                 name: product_type_name,
-                                                description: new_product_type_description.read().trim().to_string(),
+                                                description: if pt_desc.is_empty() {
+                                                    None
+                                                } else {
+                                                    Some(pt_desc)
+                                                },
+                                            }];
+
+                                            match create_product_type(NewProductTypeInput {
                                                 emoji: new_product_type_emoji.read().trim().to_string(),
+                                                translations: pt_translations,
                                                 category_ids: final_category_ids.clone(),
                                             }).await {
                                                 Ok(product_type) => product_type.id,
@@ -869,12 +949,28 @@ fn CreateProductModal(
                                             id
                                         };
 
+                                        // Build a preview ProductType from translations to compute
+                                        // combined criteria. We construct a HashMap seeded with the
+                                        // active UI language so tr_name/tr_description work.
                                         let criteria_source = if create_new_product_type() {
+                                            let new_name = new_product_type_name.read().trim().to_string();
+                                            let new_desc = new_product_type_description.read().trim().to_string();
+                                            let mut map = std::collections::HashMap::new();
+                                            map.insert(
+                                                active_locale.clone(),
+                                                crate::model::LocalizedText {
+                                                    name: new_name,
+                                                    description: if new_desc.is_empty() {
+                                                        None
+                                                    } else {
+                                                        Some(new_desc)
+                                                    },
+                                                },
+                                            );
                                             ProductType {
                                                 id: "__preview__".to_string(),
-                                                name: new_product_type_name.read().trim().to_string(),
-                                                description: new_product_type_description.read().trim().to_string(),
                                                 emoji: new_product_type_emoji.read().clone(),
+                                                translations: map,
                                                 category_ids: final_category_ids.clone(),
                                                 specific_criteria: Vec::new(),
                                                 presets: Vec::new(),
@@ -916,11 +1012,19 @@ fn CreateProductModal(
                                         }
 
                                         let product_description = new_product_description.read().trim().to_string();
+                                        let product_translations = vec![TranslationEntry {
+                                            locale: active_locale.clone(),
+                                            name: product_name,
+                                            description: if product_description.is_empty() {
+                                                None
+                                            } else {
+                                                Some(product_description)
+                                            },
+                                        }];
 
                                         match create_product(NewProductInput {
                                             product_type_id,
-                                            name: product_name,
-                                            description: product_description,
+                                            translations: product_translations,
                                             price,
                                             quantity,
                                             unit,

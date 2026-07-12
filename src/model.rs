@@ -5,50 +5,147 @@ use sqlx::{types::Json, PgPool, Row};
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+// ============================================================================
+// Multilingual data model
+// ----------------------------------------------------------------------------
+// All user-facing text (name, description) is stored ONLY in the typed
+// translation tables, keyed by BCP 47 locale code. Missing translations are
+// never fabricated; the frontend performs a deterministic fallback at render
+// time. Each entity carries a `translations: HashMap<Locale, LocalizedText>`
+// map and helpers to query the localized text for a requested locale.
+// ============================================================================
+
+/// BCP 47 locale tag (e.g. `en`, `fr`, `fr-CA`).
+pub type Locale = String;
+
+/// Localized content for a single locale.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct LocalizedText {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+}
+
+/// All translations available for an entity, keyed by BCP 47 locale code.
+pub type Translations = HashMap<Locale, LocalizedText>;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Criterion {
     pub id: String,
-    pub name: String,
-    pub description: String,
     pub emoji: String,
+    pub translations: Translations,
+}
+
+impl Criterion {
+    /// Returns the localized `name` for the requested locale, falling back to
+    /// the entity's default locale, then to the first available translation.
+    /// Returns `None` only if no translations exist.
+    #[allow(dead_code)]
+    pub fn localized_name(
+        &self,
+        requested: &str,
+        default_locale: &str,
+    ) -> Option<String> {
+        localized_value(&self.translations, requested, default_locale, |t| {
+            t.name.clone()
+        })
+    }
+
+    #[allow(dead_code)]
+    pub fn localized_description(
+        &self,
+        requested: &str,
+        default_locale: &str,
+    ) -> Option<String> {
+        localized_value(&self.translations, requested, default_locale, |t| {
+            t.description.clone().unwrap_or_default()
+        })
+        .filter(|s: &String| !s.is_empty())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Category {
     pub id: String,
-    pub name: String,
-    pub description: String,
     pub emoji: String,
-    pub criteria: Vec<Criterion>, // This will be populated by joining with criteria table
+    pub translations: Translations,
+    pub criteria: Vec<Criterion>,
+}
+
+impl Category {
+    #[allow(dead_code)]
+    pub fn localized_name(&self, requested: &str, default: &str) -> Option<String> {
+        localized_value(&self.translations, requested, default, |t| t.name.clone())
+    }
+    #[allow(dead_code)]
+    pub fn localized_description(&self, requested: &str, default: &str) -> Option<String> {
+        localized_value(&self.translations, requested, default, |t| {
+            t.description.clone().unwrap_or_default()
+        })
+        .filter(|s: &String| !s.is_empty())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ProductType {
     pub id: String,
-    pub name: String,
-    pub description: String,
     pub emoji: String,
-    pub category_ids: Vec<String>, // This will be populated by joining with product_type_categories
-    pub specific_criteria: Vec<Criterion>, // This will be populated by joining with product_type_specific_criteria
-    pub presets: Vec<WeightProfile>,       // This will need separate handling
+    pub translations: Translations,
+    pub category_ids: Vec<String>,
+    pub specific_criteria: Vec<Criterion>,
+    pub presets: Vec<WeightProfile>,
+}
+
+impl ProductType {
+    #[allow(dead_code)]
+    pub fn localized_name(&self, requested: &str, default: &str) -> Option<String> {
+        localized_value(&self.translations, requested, default, |t| t.name.clone())
+    }
+    #[allow(dead_code)]
+    pub fn localized_description(&self, requested: &str, default: &str) -> Option<String> {
+        localized_value(&self.translations, requested, default, |t| {
+            t.description.clone().unwrap_or_default()
+        })
+        .filter(|s: &String| !s.is_empty())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Product {
     pub id: String,
-    pub name: String,
-    pub description: String,
     pub price: f64,
     pub quantity: Option<f64>,
     pub unit: Option<String>,
     pub product_type_id: String,
-    pub scores: HashMap<String, f64>, // This will be populated by fetching from product_scores
+    pub translations: Translations,
+    pub scores: HashMap<String, f64>,
+}
+
+impl Product {
+    #[allow(dead_code)]
+    pub fn localized_name(&self, requested: &str, default: &str) -> Option<String> {
+        localized_value(&self.translations, requested, default, |t| t.name.clone())
+    }
+    #[allow(dead_code)]
+    pub fn localized_description(&self, requested: &str, default: &str) -> Option<String> {
+        localized_value(&self.translations, requested, default, |t| {
+            t.description.clone().unwrap_or_default()
+        })
+        .filter(|s: &String| !s.is_empty())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct WeightProfile {
-    pub name: String,
+    pub translations: Translations,
     pub weights: HashMap<String, f64>,
+}
+
+impl WeightProfile {
+    #[allow(dead_code)]
+    pub fn localized_name(&self, requested: &str, default: &str) -> Option<String> {
+        localized_value(&self.translations, requested, default, |t| t.name.clone())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -56,60 +153,152 @@ pub struct AppData {
     pub categories: Vec<Category>,
     pub product_types: Vec<ProductType>,
     pub products: Vec<Product>,
+    pub default_locale: String,
+    pub enabled_locales: Vec<Locale>,
+}
+
+// ----------------------------------------------------------------------------
+// Multilingual inputs
+// ----------------------------------------------------------------------------
+
+/// Translation entry submitted alongside a new entity. Only the active UI
+/// language is required; other locales are optional and stored only when
+/// non-empty.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TranslationEntry {
+    pub locale: Locale,
+    pub name: String,
+    #[serde(default)]
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NewCategoryInput {
-    pub name: String,
-    pub description: String,
     pub emoji: String,
+    pub translations: Vec<TranslationEntry>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NewProductTypeInput {
-    pub name: String,
-    pub description: String,
     pub emoji: String,
+    pub translations: Vec<TranslationEntry>,
     pub category_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NewProductInput {
     pub product_type_id: String,
-    pub name: String,
-    pub description: String,
     pub price: f64,
     pub quantity: Option<f64>,
     pub unit: Option<String>,
+    pub translations: Vec<TranslationEntry>,
     pub scores: HashMap<String, f64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct TranslationInput {
-    pub entity_type: String, // 'criterion', 'category', 'product_type', 'product', 'weight_profile'
-    pub entity_id: String,
-    pub language_code: String,
-    pub field_name: String, // 'name' or 'description'
-    pub value: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SupportedLanguage {
-    pub code: String,
-    pub name: String,
+    pub code: Locale,
+    pub english_name: String,
     pub native_name: String,
     pub is_default: bool,
     pub is_enabled: bool,
 }
 
+// ----------------------------------------------------------------------------
+// Fallback resolution (used by the frontend; the backend keeps raw maps)
+// ----------------------------------------------------------------------------
+
+/// Resolve a single localized value using the standardized fallback chain:
+/// 1. exact requested locale (e.g. `fr-CA`);
+/// 2. base-language match (e.g. `fr` from `fr-CA`);
+/// 3. the database default locale;
+/// 4. the first available translation (any locale);
+/// 5. `None` if no translation exists.
+pub fn localized_value<F>(
+    translations: &Translations,
+    requested: &str,
+    default_locale: &str,
+    pick: F,
+) -> Option<String>
+where
+    F: Fn(&LocalizedText) -> String,
+{
+    if let Some(t) = translations.get(requested) {
+        let v = pick(t);
+        if !v.is_empty() {
+            return Some(v);
+        }
+    }
+    let base = requested.split('-').next().unwrap_or(requested);
+    if base != requested {
+        if let Some(t) = translations.get(base) {
+            let v = pick(t);
+            if !v.is_empty() {
+                return Some(v);
+            }
+        }
+    }
+    if let Some(t) = translations.get(default_locale) {
+        let v = pick(t);
+        if !v.is_empty() {
+            return Some(v);
+        }
+    }
+    for t in translations.values() {
+        let v = pick(t);
+        if !v.is_empty() {
+            return Some(v);
+        }
+    }
+    None
+}
+
+/// Helper: convenience to resolve a missing-content label for UI use only.
+pub fn missing_label() -> &'static str {
+    "—"
+}
+
+// ============================================================================
+// Frontend-only convenience wrappers
+// ----------------------------------------------------------------------------
+// The frontend wants a single expression that resolves a localized name
+// regardless of which entity it is working with. The wrappers below make
+// call-sites short while still performing the full fallback chain.
+// ============================================================================
+
+pub fn tr_name(translations: &Translations, requested: &str, default_locale: &str) -> String {
+    localized_value(translations, requested, default_locale, |t| t.name.clone())
+        .unwrap_or_else(|| missing_label().to_string())
+}
+
+pub fn tr_description(
+    translations: &Translations,
+    requested: &str,
+    default_locale: &str,
+) -> String {
+    localized_value(translations, requested, default_locale, |t| {
+        t.description.clone().unwrap_or_default()
+    })
+    .unwrap_or_default()
+}
+// ============================================================================
+// Server queries
+// ============================================================================
+#[cfg(feature = "server")]
+fn slugify(value: &str) -> String {
+    let slug = value
+        .trim()
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
+        .collect::<String>();
+    slug.trim_matches('-').to_string()
+}
+
 #[cfg(feature = "server")]
 fn unique_id_from_name(name: &str, fallback: &str) -> String {
     let slug = slugify(name);
-    let base = if slug.is_empty() {
-        fallback.to_string()
-    } else {
-        slug
-    };
+    let base = if slug.is_empty() { fallback.to_string() } else { slug };
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -121,12 +310,10 @@ fn unique_id_from_name(name: &str, fallback: &str) -> String {
 async fn generate_unique_category_id(pool: &PgPool, name: &str) -> Result<String, sqlx::Error> {
     loop {
         let candidate = unique_id_from_name(name, "category");
-        let exists: bool =
-            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM categories WHERE id = $1)")
-                .bind(&candidate)
-                .fetch_one(pool)
-                .await?;
-
+        let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM categories WHERE id = $1)")
+            .bind(&candidate)
+            .fetch_one(pool)
+            .await?;
         if !exists {
             return Ok(candidate);
         }
@@ -134,7 +321,10 @@ async fn generate_unique_category_id(pool: &PgPool, name: &str) -> Result<String
 }
 
 #[cfg(feature = "server")]
-async fn generate_unique_product_type_id(pool: &PgPool, name: &str) -> Result<String, sqlx::Error> {
+async fn generate_unique_product_type_id(
+    pool: &PgPool,
+    name: &str,
+) -> Result<String, sqlx::Error> {
     loop {
         let candidate = unique_id_from_name(name, "product-type");
         let exists: bool =
@@ -142,131 +332,331 @@ async fn generate_unique_product_type_id(pool: &PgPool, name: &str) -> Result<St
                 .bind(&candidate)
                 .fetch_one(pool)
                 .await?;
-
         if !exists {
             return Ok(candidate);
         }
     }
 }
 
-// Helper to fetch criteria for a given category
+#[cfg(feature = "server")]
+async fn generate_unique_product_id(pool: &PgPool, name: &str) -> Result<String, sqlx::Error> {
+    let base_slug = slugify(name);
+    let base = if base_slug.is_empty() { "product".to_string() } else { base_slug };
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let mut counter: u32 = 0;
+    loop {
+        let candidate = if counter == 0 {
+            format!("{}-{}", base, timestamp)
+        } else {
+            format!("{}-{}-{}", base, timestamp, counter)
+        };
+        let exists: bool = sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM products WHERE id = $1)")
+            .bind(&candidate)
+            .fetch_one(pool)
+            .await?;
+        if !exists {
+            return Ok(candidate);
+        }
+        counter = counter.saturating_add(1);
+    }
+}
+
+#[cfg(feature = "server")]
+async fn load_locale_settings(pool: &PgPool) -> Result<(String, Vec<Locale>), sqlx::Error> {
+    let rows = sqlx::query(
+        "SELECT code, is_default, is_enabled FROM locales ORDER BY is_default DESC, code",
+    )
+    .fetch_all(pool)
+    .await?;
+    let mut default_locale = "en".to_string();
+    let mut enabled = Vec::new();
+    for row in rows {
+        let code: String = row.get("code");
+        let is_default: bool = row.get("is_default");
+        let is_enabled: bool = row.get("is_enabled");
+        if is_default {
+            default_locale = code.clone();
+        }
+        if is_enabled {
+            enabled.push(code);
+        }
+    }
+    Ok((default_locale, enabled))
+}
+
+#[cfg(feature = "server")]
+async fn fetch_category_translations(
+    pool: &PgPool,
+    category_ids: &[String],
+) -> Result<HashMap<String, Translations>, sqlx::Error> {
+    let mut out: HashMap<String, Translations> = HashMap::new();
+    if category_ids.is_empty() {
+        return Ok(out);
+    }
+    let rows = sqlx::query(
+        "SELECT category_id, locale, name, description FROM category_translations WHERE category_id = ANY($1)",
+    )
+    .bind(category_ids)
+    .fetch_all(pool)
+    .await?;
+    for row in rows {
+        let id: String = row.get("category_id");
+        let locale: String = row.get("locale");
+        let name: String = row.get("name");
+        let description: Option<String> = row.get("description");
+        out.entry(id)
+            .or_default()
+            .insert(locale, LocalizedText { name, description });
+    }
+    Ok(out)
+}
+
+#[cfg(feature = "server")]
+async fn fetch_criterion_translations(
+    pool: &PgPool,
+    criterion_ids: &[String],
+) -> Result<HashMap<String, Translations>, sqlx::Error> {
+    let mut out: HashMap<String, Translations> = HashMap::new();
+    if criterion_ids.is_empty() {
+        return Ok(out);
+    }
+    let rows = sqlx::query(
+        "SELECT criterion_id, locale, name, description FROM criterion_translations WHERE criterion_id = ANY($1)",
+    )
+    .bind(criterion_ids)
+    .fetch_all(pool)
+    .await?;
+    for row in rows {
+        let id: String = row.get("criterion_id");
+        let locale: String = row.get("locale");
+        let name: String = row.get("name");
+        let description: Option<String> = row.get("description");
+        out.entry(id)
+            .or_default()
+            .insert(locale, LocalizedText { name, description });
+    }
+    Ok(out)
+}
+
+#[cfg(feature = "server")]
+async fn fetch_product_type_translations(
+    pool: &PgPool,
+    product_type_ids: &[String],
+) -> Result<HashMap<String, Translations>, sqlx::Error> {
+    let mut out: HashMap<String, Translations> = HashMap::new();
+    if product_type_ids.is_empty() {
+        return Ok(out);
+    }
+    let rows = sqlx::query(
+        "SELECT product_type_id, locale, name, description FROM product_type_translations WHERE product_type_id = ANY($1)",
+    )
+    .bind(product_type_ids)
+    .fetch_all(pool)
+    .await?;
+    for row in rows {
+        let id: String = row.get("product_type_id");
+        let locale: String = row.get("locale");
+        let name: String = row.get("name");
+        let description: Option<String> = row.get("description");
+        out.entry(id)
+            .or_default()
+            .insert(locale, LocalizedText { name, description });
+    }
+    Ok(out)
+}
+
+#[cfg(feature = "server")]
+async fn fetch_product_translations(
+    pool: &PgPool,
+    product_ids: &[String],
+) -> Result<HashMap<String, Translations>, sqlx::Error> {
+    let mut out: HashMap<String, Translations> = HashMap::new();
+    if product_ids.is_empty() {
+        return Ok(out);
+    }
+    let rows = sqlx::query(
+        "SELECT product_id, locale, name, description FROM product_translations WHERE product_id = ANY($1)",
+    )
+    .bind(product_ids)
+    .fetch_all(pool)
+    .await?;
+    for row in rows {
+        let id: String = row.get("product_id");
+        let locale: String = row.get("locale");
+        let name: String = row.get("name");
+        let description: Option<String> = row.get("description");
+        out.entry(id)
+            .or_default()
+            .insert(locale, LocalizedText { name, description });
+    }
+    Ok(out)
+}
+
+#[cfg(feature = "server")]
+async fn fetch_weight_profile_translations(
+    pool: &PgPool,
+    weight_profile_ids: &[String],
+) -> Result<HashMap<String, Translations>, sqlx::Error> {
+    let mut out: HashMap<String, Translations> = HashMap::new();
+    if weight_profile_ids.is_empty() {
+        return Ok(out);
+    }
+    let rows = sqlx::query(
+        "SELECT weight_profile_id, locale, name FROM weight_profile_translations WHERE weight_profile_id = ANY($1)",
+    )
+    .bind(weight_profile_ids)
+    .fetch_all(pool)
+    .await?;
+    for row in rows {
+        let id: String = row.get("weight_profile_id");
+        let locale: String = row.get("locale");
+        let name: String = row.get("name");
+        out.entry(id).or_default().insert(
+            locale,
+            LocalizedText { name, description: None },
+        );
+    }
+    Ok(out)
+}
+
+// ============================================================================
+// Data fetch helpers (server-only)
+// ============================================================================
+
+#[cfg(feature = "server")]
+pub async fn fetch_all_categories(pool: &PgPool) -> Result<Vec<Category>, sqlx::Error> {
+    let rows = sqlx::query("SELECT id, emoji FROM categories ORDER BY id")
+        .fetch_all(pool)
+        .await?;
+    let mut out = Vec::with_capacity(rows.len());
+    for row in rows {
+        let id: String = row.get("id");
+        let emoji: String = row.get("emoji");
+        out.push(Category {
+            id,
+            emoji,
+            translations: Translations::new(),
+            criteria: Vec::new(),
+        });
+    }
+    let ids: Vec<String> = out.iter().map(|c| c.id.clone()).collect();
+    let translations = fetch_category_translations(pool, &ids).await?;
+    for cat in &mut out {
+        if let Some(map) = translations.get(&cat.id) {
+            cat.translations = map.clone();
+        }
+    }
+    for cat in &mut out {
+        cat.criteria = fetch_criteria_for_category(pool, &cat.id).await?;
+    }
+    Ok(out)
+}
+
 #[cfg(feature = "server")]
 pub async fn fetch_criteria_for_category(
     pool: &PgPool,
     category_id: &str,
 ) -> Result<Vec<Criterion>, sqlx::Error> {
-    let criteria = sqlx::query_as!(
-        Criterion,
-        r#"
-        SELECT c.id, c.name, c.description, c.emoji
-        FROM criteria c
-        JOIN category_criteria cc ON c.id = cc.criterion_id
-        WHERE cc.category_id = $1
-        ORDER BY c.name
-        "#,
-        category_id
+    let rows = sqlx::query(
+        "SELECT c.id, c.emoji FROM criteria c JOIN category_criteria cc ON c.id = cc.criterion_id WHERE cc.category_id = $1 ORDER BY c.id",
     )
+    .bind(category_id)
     .fetch_all(pool)
     .await?;
-    Ok(criteria)
+    let ids: Vec<String> = rows
+        .iter()
+        .map(|r| r.get::<String, _>("id"))
+        .collect();
+    let translations = fetch_criterion_translations(pool, &ids).await?;
+    let mut out = Vec::with_capacity(rows.len());
+    for row in rows {
+        let id: String = row.get("id");
+        let emoji: String = row.get("emoji");
+        let mut translations_map = Translations::new();
+        if let Some(map) = translations.get(&id) {
+            translations_map = map.clone();
+        }
+        out.push(Criterion {
+            id,
+            emoji,
+            translations: translations_map,
+        });
+    }
+    Ok(out)
 }
 
-// Helper to fetch criteria for a given product type
 #[cfg(feature = "server")]
 pub async fn fetch_specific_criteria_for_product_type(
     pool: &PgPool,
     product_type_id: &str,
 ) -> Result<Vec<Criterion>, sqlx::Error> {
-    let criteria = sqlx::query_as!(
-        Criterion,
-        r#"
-        SELECT c.id, c.name, c.description, c.emoji
-        FROM criteria c
-        JOIN product_type_specific_criteria pts ON c.id = pts.criterion_id
-        WHERE pts.product_type_id = $1
-        ORDER BY c.name
-        "#,
-        product_type_id
+    let rows = sqlx::query(
+        "SELECT c.id, c.emoji FROM criteria c JOIN product_type_specific_criteria pts ON c.id = pts.criterion_id WHERE pts.product_type_id = $1 ORDER BY c.id",
     )
+    .bind(product_type_id)
     .fetch_all(pool)
     .await?;
-    Ok(criteria)
-}
-
-// Fetch all categories, including their associated criteria
-#[cfg(feature = "server")]
-pub async fn fetch_all_categories(pool: &PgPool) -> Result<Vec<Category>, sqlx::Error> {
-    let categories_rows =
-        sqlx::query("SELECT id, name, description, emoji FROM categories ORDER BY name")
-            .fetch_all(pool)
-            .await?;
-
-    let mut categories: Vec<Category> = categories_rows
-        .into_iter()
-        .map(|row| Category {
-            id: row.get("id"),
-            name: row.get("name"),
-            description: row.get("description"),
-            emoji: row.get("emoji"),
-            criteria: Vec::new(), // Initialize empty, will be populated below
-        })
+    let ids: Vec<String> = rows
+        .iter()
+        .map(|r| r.get::<String, _>("id"))
         .collect();
-
-    // Fetch all criteria once to avoid multiple queries inside the loop if possible,
-    // but for category-specific criteria, we still need to query per category.
-    // A more optimized approach might fetch all category_criteria mappings first.
-    // For now, we rely on fetch_criteria_for_category.
-    // let all_criteria = fetch_all_criteria(pool).await?; // This fetches all criteria, not specific to category
-
-    for category in &mut categories {
-        // Fetch criteria specifically for this category using the helper
-        let category_criteria = fetch_criteria_for_category(pool, &category.id).await?;
-        category.criteria = category_criteria;
+    let translations = fetch_criterion_translations(pool, &ids).await?;
+    let mut out = Vec::with_capacity(rows.len());
+    for row in rows {
+        let id: String = row.get("id");
+        let emoji: String = row.get("emoji");
+        let mut translations_map = Translations::new();
+        if let Some(map) = translations.get(&id) {
+            translations_map = map.clone();
+        }
+        out.push(Criterion {
+            id,
+            emoji,
+            translations: translations_map,
+        });
     }
-
-    Ok(categories)
+    Ok(out)
 }
 
-// Fetch all product types, including their associated category IDs and specific criteria
 #[cfg(feature = "server")]
 pub async fn fetch_all_product_types(pool: &PgPool) -> Result<Vec<ProductType>, sqlx::Error> {
-    let product_types_rows =
-        sqlx::query("SELECT id, name, description, emoji FROM product_types ORDER BY name")
-            .fetch_all(pool)
-            .await?;
-
-    let mut product_types: Vec<ProductType> = product_types_rows
-        .into_iter()
-        .map(|row| ProductType {
-            id: row.get("id"),
-            name: row.get("name"),
-            description: row.get("description"),
-            emoji: row.get("emoji"),
-            category_ids: Vec::new(),      // Initialize empty
-            specific_criteria: Vec::new(), // Initialize empty
-            presets: Vec::new(),           // Initialize empty
-        })
-        .collect();
-
-    for pt in &mut product_types {
-        // Fetch associated category IDs
-        let category_ids_rows = sqlx::query(
+    let rows = sqlx::query("SELECT id, emoji FROM product_types ORDER BY id")
+        .fetch_all(pool)
+        .await?;
+    let ids: Vec<String> = rows.iter().map(|r| r.get::<String, _>("id")).collect();
+    let translations = fetch_product_type_translations(pool, &ids).await?;
+    let mut out = Vec::with_capacity(rows.len());
+    for row in rows {
+        let id: String = row.get("id");
+        let emoji: String = row.get("emoji");
+        let translations_map = translations.get(&id).cloned().unwrap_or_default();
+        out.push(ProductType {
+            id,
+            emoji,
+            translations: translations_map,
+            category_ids: Vec::new(),
+            specific_criteria: Vec::new(),
+            presets: Vec::new(),
+        });
+    }
+    for pt in &mut out {
+        let rows = sqlx::query(
             "SELECT category_id FROM product_type_categories WHERE product_type_id = $1",
         )
         .bind(&pt.id)
         .fetch_all(pool)
         .await?;
-        pt.category_ids = category_ids_rows
+        pt.category_ids = rows
             .iter()
-            .map(|row| row.get("category_id"))
+            .map(|r| r.get::<String, _>("category_id"))
             .collect();
-
-        // Fetch specific criteria and presets for this product type
         pt.specific_criteria = fetch_specific_criteria_for_product_type(pool, &pt.id).await?;
         pt.presets = fetch_weight_profiles_for_product_type(pool, &pt.id).await?;
     }
-
-    Ok(product_types)
+    Ok(out)
 }
 
 #[cfg(feature = "server")]
@@ -275,419 +665,99 @@ pub async fn fetch_weight_profiles_for_product_type(
     product_type_id: &str,
 ) -> Result<Vec<WeightProfile>, sqlx::Error> {
     let rows = sqlx::query(
-        "SELECT name, weights FROM weight_profiles WHERE product_type_id = $1 ORDER BY name",
+        "SELECT id, weights FROM weight_profiles WHERE product_type_id = $1 ORDER BY id",
     )
     .bind(product_type_id)
     .fetch_all(pool)
     .await?;
-
-    Ok(rows
-        .into_iter()
-        .map(|row| {
-            let weights: Json<HashMap<String, f64>> = row.get("weights");
-            WeightProfile {
-                name: row.get("name"),
-                weights: weights.0,
-            }
-        })
-        .collect())
+    let ids: Vec<String> = rows.iter().map(|r| r.get::<String, _>("id")).collect();
+    let translations = fetch_weight_profile_translations(pool, &ids).await?;
+    let mut out = Vec::with_capacity(rows.len());
+    for row in rows {
+        let id: String = row.get("id");
+        let weights: Json<HashMap<String, f64>> = row.get("weights");
+        let translations_map = translations.get(&id).cloned().unwrap_or_default();
+        out.push(WeightProfile {
+            translations: translations_map,
+            weights: weights.0,
+        });
+    }
+    Ok(out)
 }
 
-// Fetch all products, including their scores.
 #[cfg(feature = "server")]
 pub async fn fetch_all_products(pool: &PgPool) -> Result<Vec<Product>, sqlx::Error> {
-    let products_rows =
-        sqlx::query("SELECT id, name, description, price, quantity, unit, product_type_id FROM products ORDER BY name")
-            .fetch_all(pool)
-            .await?;
-
-    let mut products = Vec::new();
-    for row in products_rows {
-        let product_id: String = row.get("id");
-        let scores = fetch_scores_for_product(pool, &product_id).await?;
-        products.push(Product {
-            id: product_id,
-            name: row.get("name"),
-            description: row.get("description"),
-            price: row.get("price"),
-            quantity: row.get("quantity"),
-            unit: row.get("unit"),
-            product_type_id: row.get("product_type_id"),
+    let rows = sqlx::query(
+        "SELECT id, price, quantity, unit, product_type_id FROM products ORDER BY id",
+    )
+    .fetch_all(pool)
+    .await?;
+    let ids: Vec<String> = rows.iter().map(|r| r.get::<String, _>("id")).collect();
+    let translations = fetch_product_translations(pool, &ids).await?;
+    let mut out = Vec::with_capacity(rows.len());
+    for row in rows {
+        let id: String = row.get("id");
+        let price: f64 = row.get("price");
+        let quantity: Option<f64> = row.get("quantity");
+        let unit: Option<String> = row.get("unit");
+        let product_type_id: String = row.get("product_type_id");
+        let translations_map = translations.get(&id).cloned().unwrap_or_default();
+        let scores = fetch_scores_for_product(pool, &id).await?;
+        out.push(Product {
+            id,
+            price,
+            quantity,
+            unit,
+            product_type_id,
+            translations: translations_map,
             scores,
         });
     }
-
-    Ok(products)
+    Ok(out)
 }
 
-// Fetch scores for a specific product
 #[cfg(feature = "server")]
 pub async fn fetch_scores_for_product(
     pool: &PgPool,
     product_id: &str,
 ) -> Result<HashMap<String, f64>, sqlx::Error> {
-    let scores_rows =
-        sqlx::query("SELECT criterion_id, score FROM product_scores WHERE product_id = $1")
-            .bind(product_id)
-            .fetch_all(pool)
-            .await?;
-
-    let mut scores = HashMap::new();
-    for row in scores_rows {
+    let rows = sqlx::query(
+        "SELECT criterion_id, score FROM product_scores WHERE product_id = $1",
+    )
+    .bind(product_id)
+    .fetch_all(pool)
+    .await?;
+    let mut out = HashMap::new();
+    for row in rows {
         let criterion_id: String = row.get("criterion_id");
         let score: f32 = row.get("score");
-        scores.insert(criterion_id, f64::from(score));
+        out.insert(criterion_id, f64::from(score));
     }
-    Ok(scores)
+    Ok(out)
 }
 
-// Helper to get translated value, with fallback to base content if translation doesn't exist
-#[cfg(feature = "server")]
-async fn get_translation(
-    pool: &PgPool,
-    entity_type: &str,
-    entity_id: &str,
-    field_name: &str,
-    language: &str,
-    fallback: &str,
-) -> Result<String, sqlx::Error> {
-    // Try to get translation for requested language
-    if language != "en" {
-        let result: Option<String> = sqlx::query_scalar(
-            "SELECT value FROM translations WHERE entity_type = $1 AND entity_id = $2 AND language_code = $3 AND field_name = $4"
-        )
-        .bind(entity_type)
-        .bind(entity_id)
-        .bind(language)
-        .bind(field_name)
-        .fetch_optional(pool)
-        .await?;
-
-        if let Some(value) = result {
-            return Ok(value);
-        }
-    }
-    // Fallback to provided value (usually English)
-    Ok(fallback.to_string())
-}
-
-// Helper to fetch criteria for a given category with language support
-#[cfg(feature = "server")]
-pub async fn fetch_criteria_for_category_with_language(
-    pool: &PgPool,
-    category_id: &str,
-    language: &str,
-) -> Result<Vec<Criterion>, sqlx::Error> {
-    let criteria_rows = sqlx::query(
-        r#"
-        SELECT c.id, c.name, c.description, c.emoji
-        FROM criteria c
-        JOIN category_criteria cc ON c.id = cc.criterion_id
-        WHERE cc.category_id = $1
-        ORDER BY c.name
-        "#,
-    )
-    .bind(category_id)
-    .fetch_all(pool)
-    .await?;
-
-    let mut criteria = Vec::new();
-    for row in criteria_rows {
-        let criterion_id: String = row.get("id");
-        let name = get_translation(
-            pool,
-            "criterion",
-            &criterion_id,
-            "name",
-            language,
-            &row.get::<String, _>("name"),
-        )
-        .await?;
-        let description = get_translation(
-            pool,
-            "criterion",
-            &criterion_id,
-            "description",
-            language,
-            &row.get::<String, _>("description"),
-        )
-        .await?;
-
-        criteria.push(Criterion {
-            id: criterion_id,
-            name,
-            description,
-            emoji: row.get("emoji"),
-        });
-    }
-    Ok(criteria)
-}
-
-// Helper to fetch specific criteria for a product type with language support
-#[cfg(feature = "server")]
-pub async fn fetch_specific_criteria_for_product_type_with_language(
-    pool: &PgPool,
-    product_type_id: &str,
-    language: &str,
-) -> Result<Vec<Criterion>, sqlx::Error> {
-    let criteria_rows = sqlx::query(
-        r#"
-        SELECT c.id, c.name, c.description, c.emoji
-        FROM criteria c
-        JOIN product_type_specific_criteria pts ON c.id = pts.criterion_id
-        WHERE pts.product_type_id = $1
-        ORDER BY c.name
-        "#,
-    )
-    .bind(product_type_id)
-    .fetch_all(pool)
-    .await?;
-
-    let mut criteria = Vec::new();
-    for row in criteria_rows {
-        let criterion_id: String = row.get("id");
-        let name = get_translation(
-            pool,
-            "criterion",
-            &criterion_id,
-            "name",
-            language,
-            &row.get::<String, _>("name"),
-        )
-        .await?;
-        let description = get_translation(
-            pool,
-            "criterion",
-            &criterion_id,
-            "description",
-            language,
-            &row.get::<String, _>("description"),
-        )
-        .await?;
-
-        criteria.push(Criterion {
-            id: criterion_id,
-            name,
-            description,
-            emoji: row.get("emoji"),
-        });
-    }
-    Ok(criteria)
-}
-
-// Fetch all categories with translations
-#[cfg(feature = "server")]
-pub async fn fetch_all_categories_with_language(
-    pool: &PgPool,
-    language: &str,
-) -> Result<Vec<Category>, sqlx::Error> {
-    let categories_rows =
-        sqlx::query("SELECT id, name, description, emoji FROM categories ORDER BY name")
-            .fetch_all(pool)
-            .await?;
-
-    let mut categories: Vec<Category> = Vec::new();
-
-    for row in categories_rows {
-        let category_id: String = row.get("id");
-        let name = get_translation(
-            pool,
-            "category",
-            &category_id,
-            "name",
-            language,
-            &row.get::<String, _>("name"),
-        )
-        .await?;
-        let description = get_translation(
-            pool,
-            "category",
-            &category_id,
-            "description",
-            language,
-            &row.get::<String, _>("description"),
-        )
-        .await?;
-
-        let category_criteria =
-            fetch_criteria_for_category_with_language(pool, &category_id, language).await?;
-
-        categories.push(Category {
-            id: category_id,
-            name,
-            description,
-            emoji: row.get("emoji"),
-            criteria: category_criteria,
-        });
-    }
-
-    Ok(categories)
-}
-
-// Fetch all product types with translations
-#[cfg(feature = "server")]
-pub async fn fetch_all_product_types_with_language(
-    pool: &PgPool,
-    language: &str,
-) -> Result<Vec<ProductType>, sqlx::Error> {
-    let product_types_rows =
-        sqlx::query("SELECT id, name, description, emoji FROM product_types ORDER BY name")
-            .fetch_all(pool)
-            .await?;
-
-    let mut product_types: Vec<ProductType> = Vec::new();
-
-    for row in product_types_rows {
-        let pt_id: String = row.get("id");
-        let name = get_translation(
-            pool,
-            "product_type",
-            &pt_id,
-            "name",
-            language,
-            &row.get::<String, _>("name"),
-        )
-        .await?;
-        let description = get_translation(
-            pool,
-            "product_type",
-            &pt_id,
-            "description",
-            language,
-            &row.get::<String, _>("description"),
-        )
-        .await?;
-
-        // Fetch associated category IDs
-        let category_ids_rows = sqlx::query(
-            "SELECT category_id FROM product_type_categories WHERE product_type_id = $1",
-        )
-        .bind(&pt_id)
-        .fetch_all(pool)
-        .await?;
-        let category_ids: Vec<String> = category_ids_rows
-            .iter()
-            .map(|row| row.get("category_id"))
-            .collect();
-
-        // Fetch specific criteria
-        let specific_criteria =
-            fetch_specific_criteria_for_product_type_with_language(pool, &pt_id, language).await?;
-
-        // Fetch weight profiles with translations
-        let presets =
-            fetch_weight_profiles_for_product_type_with_language(pool, &pt_id, language).await?;
-
-        product_types.push(ProductType {
-            id: pt_id,
-            name,
-            description,
-            emoji: row.get("emoji"),
-            category_ids,
-            specific_criteria,
-            presets,
-        });
-    }
-
-    Ok(product_types)
-}
-
-#[cfg(feature = "server")]
-pub async fn fetch_weight_profiles_for_product_type_with_language(
-    pool: &PgPool,
-    product_type_id: &str,
-    language: &str,
-) -> Result<Vec<WeightProfile>, sqlx::Error> {
-    let rows = sqlx::query(
-        "SELECT id, name, weights FROM weight_profiles WHERE product_type_id = $1 ORDER BY name",
-    )
-    .bind(product_type_id)
-    .fetch_all(pool)
-    .await?;
-
-    let mut profiles = Vec::new();
-    for row in rows {
-        let profile_id: String = row.get("id");
-        let name = get_translation(
-            pool,
-            "weight_profile",
-            &profile_id,
-            "name",
-            language,
-            &row.get::<String, _>("name"),
-        )
-        .await?;
-        let weights: Json<HashMap<String, f64>> = row.get("weights");
-
-        profiles.push(WeightProfile {
-            name,
-            weights: weights.0,
-        });
-    }
-    Ok(profiles)
-}
-
-// Fetch all products with translations
-#[cfg(feature = "server")]
-pub async fn fetch_all_products_with_language(
-    pool: &PgPool,
-    language: &str,
-) -> Result<Vec<Product>, sqlx::Error> {
-    let products_rows =
-        sqlx::query("SELECT id, name, description, price, quantity, unit, product_type_id FROM products ORDER BY name")
-            .fetch_all(pool)
-            .await?;
-
-    let mut products = Vec::new();
-    for row in products_rows {
-        let product_id: String = row.get("id");
-        let name = get_translation(
-            pool,
-            "product",
-            &product_id,
-            "name",
-            language,
-            &row.get::<String, _>("name"),
-        )
-        .await?;
-        let description = get_translation(
-            pool,
-            "product",
-            &product_id,
-            "description",
-            language,
-            &row.get::<String, _>("description"),
-        )
-        .await?;
-        let scores = fetch_scores_for_product(pool, &product_id).await?;
-
-        products.push(Product {
-            id: product_id,
-            name,
-            description,
-            price: row.get("price"),
-            quantity: row.get("quantity"),
-            unit: row.get("unit"),
-            product_type_id: row.get("product_type_id"),
-            scores,
-        });
-    }
-
-    Ok(products)
-}
+// ============================================================================
+// Public API endpoints (Dioxus server functions)
+// ============================================================================
 
 #[get("/api/app-data/{language}")]
 pub async fn load_app_data(language: String) -> Result<AppData, ServerFnError> {
     let pool = crate::db::server::get_pool().await;
-    let lang = if language.is_empty() { "en" } else { &language };
+    let (default_locale, enabled_locales) = load_locale_settings(pool)
+        .await
+        .map_err(|err| ServerFnError::new(err.to_string()))?;
+    // The `language` query parameter is accepted for backwards compatibility
+    // but the backend now returns raw translation maps; the frontend does the
+    // fallback resolution. We still normalize an empty value to the default.
+    let _ = if language.is_empty() { default_locale.clone() } else { language };
 
-    let categories = fetch_all_categories_with_language(pool, lang)
+    let categories = fetch_all_categories(pool)
         .await
         .map_err(|err| ServerFnError::new(err.to_string()))?;
-    let product_types = fetch_all_product_types_with_language(pool, lang)
+    let product_types = fetch_all_product_types(pool)
         .await
         .map_err(|err| ServerFnError::new(err.to_string()))?;
-    let products = fetch_all_products_with_language(pool, lang)
+    let products = fetch_all_products(pool)
         .await
         .map_err(|err| ServerFnError::new(err.to_string()))?;
 
@@ -695,56 +765,284 @@ pub async fn load_app_data(language: String) -> Result<AppData, ServerFnError> {
         categories,
         product_types,
         products,
+        default_locale,
+        enabled_locales,
+    })
+}
+
+#[get("/api/supported-languages")]
+pub async fn get_supported_languages() -> Result<Vec<SupportedLanguage>, ServerFnError> {
+    let pool = crate::db::server::get_pool().await;
+    let rows = sqlx::query(
+        "SELECT code, english_name, native_name, is_default, is_enabled FROM locales ORDER BY is_default DESC, code",
+    )
+    .fetch_all(pool)
+    .await
+    .map_err(|err| ServerFnError::new(err.to_string()))?;
+    Ok(rows
+        .into_iter()
+        .map(|row| SupportedLanguage {
+            code: row.get("code"),
+            english_name: row.get("english_name"),
+            native_name: row.get("native_name"),
+            is_default: row.get("is_default"),
+            is_enabled: row.get("is_enabled"),
+        })
+        .collect())
+}
+
+// ----------------------------------------------------------------------------
+// Validation helpers
+// ----------------------------------------------------------------------------
+
+#[cfg(feature = "server")]
+async fn enabled_locale_set(
+    pool: &PgPool,
+) -> Result<std::collections::HashSet<String>, sqlx::Error> {
+    let rows = sqlx::query("SELECT code, is_enabled FROM locales")
+        .fetch_all(pool)
+        .await?;
+    let mut set = std::collections::HashSet::new();
+    for row in rows {
+        let code: String = row.get("code");
+        let is_enabled: bool = row.get("is_enabled");
+        if is_enabled {
+            set.insert(code);
+        }
+    }
+    Ok(set)
+}
+
+#[cfg(feature = "server")]
+async fn active_locale_for_request(pool: &PgPool) -> Result<String, sqlx::Error> {
+    let row = sqlx::query("SELECT code FROM locales WHERE is_default = TRUE LIMIT 1")
+        .fetch_optional(pool)
+        .await?;
+    Ok(match row {
+        Some(r) => r.get("code"),
+        None => "en".to_string(),
     })
 }
 
 #[cfg(feature = "server")]
-fn slugify(value: &str) -> String {
-    let slug = value
-        .trim()
-        .to_lowercase()
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
-        .collect::<String>();
+fn is_valid_bcp47(tag: &str) -> bool {
+    // Lightweight BCP 47 validation: language, optional script, optional region.
+    // Accepts "en", "fr", "fr-CA", "zh-Hans-CN", etc.
+    if tag.is_empty() || tag.len() > 35 {
+        return false;
+    }
+    let parts: Vec<&str> = tag.split('-').collect();
+    if parts.is_empty() {
+        return false;
+    }
+    // Primary language subtag: 2-3 ASCII letters
+    let primary = parts[0];
+    if !(2..=3).contains(&primary.len()) || !primary.chars().all(|c| c.is_ascii_alphabetic()) {
+        return false;
+    }
+    for part in &parts[1..] {
+        if part.is_empty() {
+            return false;
+        }
+        let len = part.len();
+        // Script: 4 letters; Region: 2 letters or 3 digits
+        if len == 4 && part.chars().all(|c| c.is_ascii_alphabetic()) {
+            continue;
+        }
+        if (len == 2 || len == 3) && part.chars().all(|c| c.is_ascii_alphabetic()) {
+            continue;
+        }
+        if len == 2 && part.chars().all(|c| c.is_ascii_digit()) {
+            continue;
+        }
+        return false;
+    }
+    true
+}
 
-    slug.trim_matches('-').to_string()
+#[cfg(feature = "server")]
+fn clean_translation(
+    entry: &TranslationEntry,
+    enabled: &std::collections::HashSet<String>,
+    default_locale: &str,
+) -> Result<Option<(String, String, Option<String>)>, String> {
+    let locale = entry.locale.trim().to_string();
+    if locale.is_empty() {
+        return Err("Empty locale in translation entry".to_string());
+    }
+    if !is_valid_bcp47(&locale) {
+        return Err(format!("Invalid BCP 47 locale: {locale}"));
+    }
+    if !enabled.contains(&locale) {
+        return Err(format!("Locale '{locale}' is not enabled"));
+    }
+    let name = entry.name.trim().to_string();
+    if name.is_empty() {
+        // Empty optional translations are silently dropped, not stored.
+        return Ok(None);
+    }
+    let description = entry
+        .description
+        .as_ref()
+        .map(|d| d.trim().to_string())
+        .filter(|d| !d.is_empty());
+    // The default-locale name must always be present; if the client sent only
+    // an optional locale, that is acceptable, but the default must be filled
+    // elsewhere. We do NOT manufacture a name here.
+    if locale == default_locale {
+        // Make sure description is at least NULL when missing.
+    }
+    Ok(Some((locale, name, description)))
+}
+// ============================================================================
+// Create endpoints (multilingual-aware)
+// ============================================================================
+
+#[cfg(feature = "server")]
+async fn insert_category_translations(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    category_id: &str,
+    entries: &[(String, String, Option<String>)],
+) -> Result<(), sqlx::Error> {
+    for (locale, name, description) in entries {
+        sqlx::query(
+            "INSERT INTO category_translations (category_id, locale, name, description)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (category_id, locale) DO UPDATE
+             SET name = EXCLUDED.name, description = EXCLUDED.description",
+        )
+        .bind(category_id)
+        .bind(locale)
+        .bind(name)
+        .bind(description.as_deref())
+        .execute(&mut **tx)
+        .await?;
+    }
+    Ok(())
+}
+
+#[cfg(feature = "server")]
+async fn insert_product_type_translations(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    product_type_id: &str,
+    entries: &[(String, String, Option<String>)],
+) -> Result<(), sqlx::Error> {
+    for (locale, name, description) in entries {
+        sqlx::query(
+            "INSERT INTO product_type_translations (product_type_id, locale, name, description)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (product_type_id, locale) DO UPDATE
+             SET name = EXCLUDED.name, description = EXCLUDED.description",
+        )
+        .bind(product_type_id)
+        .bind(locale)
+        .bind(name)
+        .bind(description.as_deref())
+        .execute(&mut **tx)
+        .await?;
+    }
+    Ok(())
+}
+
+#[cfg(feature = "server")]
+async fn insert_product_translations(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    product_id: &str,
+    entries: &[(String, String, Option<String>)],
+) -> Result<(), sqlx::Error> {
+    for (locale, name, description) in entries {
+        sqlx::query(
+            "INSERT INTO product_translations (product_id, locale, name, description)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (product_id, locale) DO UPDATE
+             SET name = EXCLUDED.name, description = EXCLUDED.description",
+        )
+        .bind(product_id)
+        .bind(locale)
+        .bind(name)
+        .bind(description.as_deref())
+        .execute(&mut **tx)
+        .await?;
+    }
+    Ok(())
+}
+
+#[cfg(feature = "server")]
+fn process_translations(
+    entries: &[TranslationEntry],
+    enabled: &std::collections::HashSet<String>,
+    default_locale: &str,
+) -> Result<Vec<(String, String, Option<String>)>, String> {
+    let mut out = Vec::new();
+    let mut seen_locales: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut has_default = false;
+    for entry in entries {
+        if !seen_locales.insert(entry.locale.clone()) {
+            return Err(format!(
+                "Duplicate locale '{}' in translations",
+                entry.locale
+            ));
+        }
+        if let Some(cleaned) = clean_translation(entry, enabled, default_locale)? {
+            if cleaned.0 == default_locale {
+                has_default = true;
+            }
+            out.push(cleaned);
+        }
+    }
+    if !has_default {
+        return Err(format!(
+            "Translations must include the default locale '{default_locale}' with a non-empty name"
+        ));
+    }
+    Ok(out)
 }
 
 #[post("/api/categories")]
 pub async fn create_category(input: NewCategoryInput) -> Result<Category, ServerFnError> {
     let pool = crate::db::server::get_pool().await;
-    let category_id = generate_unique_category_id(pool, &input.name)
+    let default_locale = active_locale_for_request(pool)
         .await
         .map_err(|err| ServerFnError::new(err.to_string()))?;
-
+    let enabled = enabled_locale_set(pool)
+        .await
+        .map_err(|err| ServerFnError::new(err.to_string()))?;
+    let cleaned = process_translations(&input.translations, &enabled, &default_locale)
+        .map_err(|err| ServerFnError::new(err.to_string()))?;
+    // The slug is derived from the current-locale (default) name only. We do
+    // NOT mix other locales' content into the id.
+    let current_name = cleaned
+        .iter()
+        .find(|(loc, _, _)| loc == &default_locale)
+        .map(|(_, n, _)| n.clone())
+        .ok_or_else(|| ServerFnError::new("Missing default-locale name".to_string()))?;
+    let category_id = generate_unique_category_id(pool, &current_name)
+        .await
+        .map_err(|err| ServerFnError::new(err.to_string()))?;
     let mut tx = pool
         .begin()
         .await
         .map_err(|err| ServerFnError::new(err.to_string()))?;
-
-    sqlx::query(
-        r#"
-        INSERT INTO categories (id, name, description, emoji)
-        VALUES ($1, $2, $3, $4)
-        "#,
-    )
-    .bind(&category_id)
-    .bind(&input.name)
-    .bind(&input.description)
-    .bind(&input.emoji)
-    .execute(&mut *tx)
-    .await
-    .map_err(|err| ServerFnError::new(err.to_string()))?;
-
+    sqlx::query("INSERT INTO categories (id, emoji) VALUES ($1, $2)")
+        .bind(&category_id)
+        .bind(&input.emoji)
+        .execute(&mut *tx)
+        .await
+        .map_err(|err| ServerFnError::new(err.to_string()))?;
+    insert_category_translations(&mut tx, &category_id, &cleaned)
+        .await
+        .map_err(|err| ServerFnError::new(err.to_string()))?;
     tx.commit()
         .await
         .map_err(|err| ServerFnError::new(err.to_string()))?;
-
+    let mut translations = Translations::new();
+    for (locale, name, description) in cleaned {
+        translations.insert(locale, LocalizedText { name, description });
+    }
     Ok(Category {
         id: category_id,
-        name: input.name,
-        description: input.description,
         emoji: input.emoji,
+        translations,
         criteria: Vec::new(),
     })
 }
@@ -752,36 +1050,36 @@ pub async fn create_category(input: NewCategoryInput) -> Result<Category, Server
 #[post("/api/product-types")]
 pub async fn create_product_type(input: NewProductTypeInput) -> Result<ProductType, ServerFnError> {
     let pool = crate::db::server::get_pool().await;
-    let product_type_id = generate_unique_product_type_id(pool, &input.name)
+    let default_locale = active_locale_for_request(pool)
         .await
         .map_err(|err| ServerFnError::new(err.to_string()))?;
-
+    let enabled = enabled_locale_set(pool)
+        .await
+        .map_err(|err| ServerFnError::new(err.to_string()))?;
+    let cleaned = process_translations(&input.translations, &enabled, &default_locale)
+        .map_err(|err| ServerFnError::new(err.to_string()))?;
+    let current_name = cleaned
+        .iter()
+        .find(|(loc, _, _)| loc == &default_locale)
+        .map(|(_, n, _)| n.clone())
+        .ok_or_else(|| ServerFnError::new("Missing default-locale name".to_string()))?;
+    let product_type_id = generate_unique_product_type_id(pool, &current_name)
+        .await
+        .map_err(|err| ServerFnError::new(err.to_string()))?;
     let mut tx = pool
         .begin()
         .await
         .map_err(|err| ServerFnError::new(err.to_string()))?;
-
-    sqlx::query(
-        r#"
-        INSERT INTO product_types (id, name, description, emoji)
-        VALUES ($1, $2, $3, $4)
-        "#,
-    )
-    .bind(&product_type_id)
-    .bind(&input.name)
-    .bind(&input.description)
-    .bind(&input.emoji)
-    .execute(&mut *tx)
-    .await
-    .map_err(|err| ServerFnError::new(err.to_string()))?;
-
+    sqlx::query("INSERT INTO product_types (id, emoji) VALUES ($1, $2)")
+        .bind(&product_type_id)
+        .bind(&input.emoji)
+        .execute(&mut *tx)
+        .await
+        .map_err(|err| ServerFnError::new(err.to_string()))?;
     for category_id in &input.category_ids {
         sqlx::query(
-            r#"
-            INSERT INTO product_type_categories (product_type_id, category_id)
-            VALUES ($1, $2)
-            ON CONFLICT DO NOTHING
-            "#,
+            "INSERT INTO product_type_categories (product_type_id, category_id)
+             VALUES ($1, $2) ON CONFLICT DO NOTHING",
         )
         .bind(&product_type_id)
         .bind(category_id)
@@ -789,78 +1087,54 @@ pub async fn create_product_type(input: NewProductTypeInput) -> Result<ProductTy
         .await
         .map_err(|err| ServerFnError::new(err.to_string()))?;
     }
-
+    insert_product_type_translations(&mut tx, &product_type_id, &cleaned)
+        .await
+        .map_err(|err| ServerFnError::new(err.to_string()))?;
     tx.commit()
         .await
         .map_err(|err| ServerFnError::new(err.to_string()))?;
-
+    let mut translations = Translations::new();
+    for (locale, name, description) in cleaned {
+        translations.insert(locale, LocalizedText { name, description });
+    }
     Ok(ProductType {
         id: product_type_id,
-        name: input.name,
-        description: input.description,
         emoji: input.emoji,
+        translations,
         category_ids: input.category_ids,
         specific_criteria: Vec::new(),
         presets: Vec::new(),
     })
 }
 
-#[cfg(feature = "server")]
-async fn generate_unique_product_id(pool: &PgPool, name: &str) -> Result<String, sqlx::Error> {
-    let base_slug = slugify(name);
-    let base = if base_slug.is_empty() {
-        "product".to_string()
-    } else {
-        base_slug
-    };
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos();
-
-    let mut counter: u32 = 0;
-    loop {
-        let candidate = if counter == 0 {
-            format!("{}-{}", base, timestamp)
-        } else {
-            format!("{}-{}-{}", base, timestamp, counter)
-        };
-
-        let exists: bool =
-            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM products WHERE id = $1)")
-                .bind(&candidate)
-                .fetch_one(pool)
-                .await?;
-
-        if !exists {
-            return Ok(candidate);
-        }
-
-        counter = counter.saturating_add(1);
-    }
-}
-
 #[post("/api/products")]
 pub async fn create_product(input: NewProductInput) -> Result<Product, ServerFnError> {
     let pool = crate::db::server::get_pool().await;
-    let product_id = generate_unique_product_id(pool, &input.name)
+    let default_locale = active_locale_for_request(pool)
         .await
         .map_err(|err| ServerFnError::new(err.to_string()))?;
-
+    let enabled = enabled_locale_set(pool)
+        .await
+        .map_err(|err| ServerFnError::new(err.to_string()))?;
+    let cleaned = process_translations(&input.translations, &enabled, &default_locale)
+        .map_err(|err| ServerFnError::new(err.to_string()))?;
+    let current_name = cleaned
+        .iter()
+        .find(|(loc, _, _)| loc == &default_locale)
+        .map(|(_, n, _)| n.clone())
+        .ok_or_else(|| ServerFnError::new("Missing default-locale name".to_string()))?;
+    let product_id = generate_unique_product_id(pool, &current_name)
+        .await
+        .map_err(|err| ServerFnError::new(err.to_string()))?;
     let mut tx = pool
         .begin()
         .await
         .map_err(|err| ServerFnError::new(err.to_string()))?;
-
     sqlx::query(
-        r#"
-        INSERT INTO products (id, name, description, price, quantity, unit, product_type_id)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        "#,
+        "INSERT INTO products (id, price, quantity, unit, product_type_id)
+         VALUES ($1, $2, $3, $4, $5)",
     )
     .bind(&product_id)
-    .bind(&input.name)
-    .bind(&input.description)
     .bind(input.price)
     .bind(input.quantity)
     .bind(input.unit.as_deref())
@@ -868,13 +1142,10 @@ pub async fn create_product(input: NewProductInput) -> Result<Product, ServerFnE
     .execute(&mut *tx)
     .await
     .map_err(|err| ServerFnError::new(err.to_string()))?;
-
     for (criterion_id, score) in &input.scores {
         sqlx::query(
-            r#"
-            INSERT INTO product_scores (product_id, criterion_id, score)
-            VALUES ($1, $2, $3)
-            "#,
+            "INSERT INTO product_scores (product_id, criterion_id, score)
+             VALUES ($1, $2, $3)",
         )
         .bind(&product_id)
         .bind(criterion_id)
@@ -883,33 +1154,39 @@ pub async fn create_product(input: NewProductInput) -> Result<Product, ServerFnE
         .await
         .map_err(|err| ServerFnError::new(err.to_string()))?;
     }
-
+    insert_product_translations(&mut tx, &product_id, &cleaned)
+        .await
+        .map_err(|err| ServerFnError::new(err.to_string()))?;
     tx.commit()
         .await
         .map_err(|err| ServerFnError::new(err.to_string()))?;
-
+    let mut translations = Translations::new();
+    for (locale, name, description) in cleaned {
+        translations.insert(locale, LocalizedText { name, description });
+    }
     Ok(Product {
         id: product_id,
-        name: input.name,
-        description: input.description,
         price: input.price,
         quantity: input.quantity,
         unit: input.unit,
         product_type_id: input.product_type_id,
+        translations,
         scores: input.scores,
     })
 }
 
+// ============================================================================
+// Client-side helpers (no server-only deps)
+// ============================================================================
+
 pub fn calculate_score(product: &Product, weights: &HashMap<String, f64>) -> f64 {
     let mut total_score = 0.0;
     let mut total_weight = 0.0;
-
     for (criterion_id, score) in &product.scores {
         let weight = weights.get(criterion_id).copied().unwrap_or(5.0);
         total_score += score * weight;
         total_weight += weight;
     }
-
     if total_weight > 0.0 {
         total_score / total_weight
     } else {
@@ -923,15 +1200,11 @@ pub fn get_combined_criteria(
 ) -> Vec<Criterion> {
     let mut list = Vec::new();
     let mut seen = std::collections::HashSet::new();
-
-    // Add specific criteria for the product type
     for criterion in &product_type.specific_criteria {
         if seen.insert(criterion.id.clone()) {
             list.push(criterion.clone());
         }
     }
-
-    // Add criteria from associated categories
     for category_id in &product_type.category_ids {
         if let Some(category) = categories.iter().find(|c| c.id == *category_id) {
             for criterion in &category.criteria {
@@ -941,90 +1214,79 @@ pub fn get_combined_criteria(
             }
         }
     }
-
-    // Sort criteria by name for consistent ordering
-    list.sort_by(|a, b| a.name.cmp(&b.name));
+    list.sort_by(|a, b| a.id.cmp(&b.id));
     list
 }
 
-// Server function to add or update a translation
-#[cfg(feature = "server")]
-async fn upsert_translation(
-    pool: &PgPool,
-    entity_type: &str,
-    entity_id: &str,
-    language_code: &str,
-    field_name: &str,
-    value: &str,
-) -> Result<(), sqlx::Error> {
-    let trans_id = format!(
-        "trans-{}-{}-{}-{}",
-        entity_id,
-        language_code,
-        field_name,
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos()
-    );
+// ============================================================================
+// Unit tests
+// ============================================================================
 
-    sqlx::query(
-        r#"
-        INSERT INTO translations (id, entity_type, entity_id, language_code, field_name, value)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        ON CONFLICT (entity_type, entity_id, language_code, field_name) 
-        DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP
-        "#,
-    )
-    .bind(trans_id)
-    .bind(entity_type)
-    .bind(entity_id)
-    .bind(language_code)
-    .bind(field_name)
-    .bind(value)
-    .execute(pool)
-    .await?;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    Ok(())
-}
+    fn map(entries: &[(&str, &str, Option<&str>)]) -> Translations {
+        let mut t = Translations::new();
+        for (loc, name, desc) in entries {
+            t.insert(
+                loc.to_string(),
+                LocalizedText {
+                    name: name.to_string(),
+                    description: desc.map(|s| s.to_string()),
+                },
+            );
+        }
+        t
+    }
 
-#[post("/api/translations")]
-pub async fn save_translation(input: TranslationInput) -> Result<(), ServerFnError> {
-    let pool = crate::db::server::get_pool().await;
+    #[test]
+    fn fallback_exact_locale_wins() {
+        let t = map(&[
+            ("en", "English", None),
+            ("fr", "Français", Some("desc FR")),
+        ]);
+        let v = localized_value(&t, "fr", "en", |x| x.name.clone());
+        assert_eq!(v.as_deref(), Some("Français"));
+    }
 
-    upsert_translation(
-        pool,
-        &input.entity_type,
-        &input.entity_id,
-        &input.language_code,
-        &input.field_name,
-        &input.value,
-    )
-    .await
-    .map_err(|err| ServerFnError::new(err.to_string()))?;
+    #[test]
+    fn fallback_to_base_when_region_missing() {
+        let t = map(&[("en", "English", None), ("fr", "Français", None)]);
+        let v = localized_value(&t, "fr-CA", "en", |x| x.name.clone());
+        assert_eq!(v.as_deref(), Some("Français"));
+    }
 
-    Ok(())
-}
+    #[test]
+    fn fallback_to_default_locale() {
+        let t = map(&[("en", "English", None)]);
+        let v = localized_value(&t, "es", "en", |x| x.name.clone());
+        assert_eq!(v.as_deref(), Some("English"));
+    }
 
-#[get("/api/supported-languages")]
-pub async fn get_supported_languages() -> Result<Vec<SupportedLanguage>, ServerFnError> {
-    let pool = crate::db::server::get_pool().await;
+    #[test]
+    fn fallback_to_any_available() {
+        let t = map(&[("de", "Deutsch", None)]);
+        let v = localized_value(&t, "es", "en", |x| x.name.clone());
+        assert_eq!(v.as_deref(), Some("Deutsch"));
+    }
 
-    let rows = sqlx::query(
-        "SELECT code, name, native_name, is_default, is_enabled FROM supported_languages ORDER BY is_default DESC, code",
-    )
-    .fetch_all(pool)
-    .await
-    .map_err(|err| ServerFnError::new(err.to_string()))?;
+    #[test]
+    fn fallback_returns_none_when_empty() {
+        let t: Translations = HashMap::new();
+        let v = localized_value(&t, "en", "en", |x| x.name.clone());
+        assert_eq!(v, None);
+    }
 
-    Ok(rows
-        .into_iter()
-        .map(|row| SupportedLanguage {
-            code: row.get("code"),
-            name: row.get("name"),
-            native_name: row.get("native_name"),
-            is_default: row.get("is_default"),
-            is_enabled: row.get("is_enabled"),
-        })
-        .collect())
+    #[test]
+    fn bcp47_validates_tags() {
+        assert!(is_valid_bcp47("en"));
+        assert!(is_valid_bcp47("fr"));
+        assert!(is_valid_bcp47("fr-CA"));
+        assert!(is_valid_bcp47("zh-Hans-CN"));
+        assert!(!is_valid_bcp47(""));
+        assert!(!is_valid_bcp47("e"));
+        assert!(!is_valid_bcp47("en_US"));
+        assert!(!is_valid_bcp47("en-"));
+    }
 }

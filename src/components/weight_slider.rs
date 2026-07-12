@@ -1,18 +1,21 @@
+use crate::model::{tr_description, tr_name, Translations};
 use dioxus::prelude::*;
 
 #[component]
 pub fn WeightSlider(
     id: String,
-    name: String,
-    description: String,
+    translations: Translations,
     emoji: String,
     weight: f64,
     onchange: EventHandler<f64>,
 ) -> Element {
     let lang = use_context::<Signal<crate::i18n::Language>>();
+    let default_locale = use_context::<Signal<String>>();
+    let active = lang().as_code().to_string();
+    let default_locale_val = default_locale();
     let rounded_weight = (weight * 10.0).round() / 10.0;
-    let localized_name = lang().tr(&name);
-    let localized_description = lang().tr(&description);
+    let localized_name = tr_name(&translations, &active, &default_locale_val);
+    let localized_description = tr_description(&translations, &active, &default_locale_val);
 
     rsx! {
         div {

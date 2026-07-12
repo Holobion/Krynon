@@ -1,7 +1,7 @@
 use crate::components::{ProductCard, WeightSlider};
 use crate::model::{
-    calculate_score, create_product, get_combined_criteria, load_app_data, Category,
-    NewProductInput, Product, ProductType,
+    calculate_score, create_product, get_combined_criteria, load_app_data, tr_description, tr_name,
+    Category, NewProductInput, Product, ProductType, TranslationEntry,
 };
 use crate::Route;
 use dioxus::prelude::*;
@@ -10,6 +10,7 @@ use std::collections::HashMap;
 #[component]
 pub fn WorkspacePage(id: String) -> Element {
     let lang = use_context::<Signal<crate::i18n::Language>>();
+    let default_locale = use_context::<Signal<String>>();
     let mut search_query = use_context::<Signal<String>>();
     let data = use_resource(move || async move { load_app_data(lang().as_code().to_string()).await });
     let pt_id = id.clone();
@@ -49,6 +50,9 @@ pub fn WorkspacePage(id: String) -> Element {
         return rsx! { div { class: "max-w-6xl mx-auto px-6 py-20 text-kr-text-matrix font-mono text-xs animate-pulse", "{lang().t(\"Loading classification data...\")}" } };
     }
 
+    let active = lang().as_code().to_string();
+    let default_locale_val = default_locale();
+
     let maybe_pt = product_types.read().iter().find(|p| p.id == pt_id).cloned();
     let pt = match maybe_pt {
         Some(p) => p,
@@ -76,8 +80,12 @@ pub fn WorkspacePage(id: String) -> Element {
         .filter(|p| p.product_type_id == pt.id)
         .filter(|p| {
             query_str.is_empty()
-                || p.name.to_lowercase().contains(&query_str)
-                || p.description.to_lowercase().contains(&query_str)
+                || tr_name(&p.translations, &active, &default_locale_val)
+                    .to_lowercase()
+                    .contains(&query_str)
+                || tr_description(&p.translations, &active, &default_locale_val)
+                    .to_lowercase()
+                    .contains(&query_str)
         })
         .cloned()
         .collect();
@@ -104,11 +112,13 @@ pub fn WorkspacePage(id: String) -> Element {
                     Link {
                         to: Route::CategoryPage { id: cat.id.clone() },
                         class: "hover:text-kr-turquoise transition-colors",
-                        "{lang().tr(&cat.name)}"
+                        "{tr_name(&cat.translations, &active, &default_locale_val)}"
                     }
                     span { class: "text-kr-text-nucleus/30", "/" }
                 }
-                span { class: "text-kr-text-nucleus font-bold", "{lang().tr(&pt.name)}" }
+                span { class: "text-kr-text-nucleus font-bold",
+                    "{tr_name(&pt.translations, &active, &default_locale_val)}"
+                }
             }
 
             // Page header
@@ -123,8 +133,12 @@ pub fn WorkspacePage(id: String) -> Element {
                     class: "flex items-start gap-4",
                     span { class: "text-4xl leading-none mt-1", "{pt.emoji}" }
                     div {
-                        h1 { class: "text-3xl font-black text-kr-text-nucleus tracking-tight font-display uppercase", "{lang().tr(&pt.name)}" }
-                        p { class: "font-serif italic text-kr-text-matrix mt-1 leading-relaxed max-w-2xl text-sm", "{lang().tr(&pt.description)}" }
+                        h1 { class: "text-3xl font-black text-kr-text-nucleus tracking-tight font-display uppercase",
+                            "{tr_name(&pt.translations, &active, &default_locale_val)}"
+                        }
+                        p { class: "font-serif italic text-kr-text-matrix mt-1 leading-relaxed max-w-2xl text-sm",
+                            "{tr_description(&pt.translations, &active, &default_locale_val)}"
+                        }
                     }
                 }
             }
@@ -170,14 +184,16 @@ pub fn WorkspacePage(id: String) -> Element {
                             class: "flex justify-between items-start",
                             h2 { class: "text-base font-bold text-kr-text-nucleus flex items-center gap-2 font-display",
                                 span { "{pt.emoji}" }
-                                span { "{lang().tr(&pt.name)}" }
+                                span { "{tr_name(&pt.translations, &active, &default_locale_val)}" }
                             }
                             span {
                                 class: "text-[10px] uppercase font-extrabold px-2 py-0.5 border border-kr-text-nucleus/20 text-kr-turquoise font-mono",
                                 "{lang().t(\"Product Type\")}"
                             }
                         }
-                        p { class: "text-kr-text-matrix text-xs mt-2.5 leading-relaxed font-serif italic", "{lang().tr(&pt.description)}" }
+                        p { class: "text-kr-text-matrix text-xs mt-2.5 leading-relaxed font-serif italic",
+                            "{tr_description(&pt.translations, &active, &default_locale_val)}"
+                        }
                     }
 
                     // Presets
@@ -192,10 +208,10 @@ pub fn WorkspacePage(id: String) -> Element {
                                         let preset = preset.clone();
                                         rsx! {
                                             button {
-                                                key: "{preset.name}",
+                                                key: "{preset.translations.get(&active).map(|t| t.name.clone()).unwrap_or_default()}",
                                                 class: "px-4 py-1 bg-kr-membrane hover:bg-kr-cytoplasm border border-kr-text-nucleus/15 hover:border-kr-turquoise/30 text-xs font-semibold text-kr-text-matrix hover:text-kr-text-nucleus transition-all active:scale-95",
                                                 onclick: move |_| weights.set(preset.weights.clone()),
-                                                "{lang().tr(&preset.name)}"
+                                                "{tr_name(&preset.translations, &active, &default_locale_val)}"
                                             }
                                         }
                                     }
@@ -229,8 +245,7 @@ pub fn WorkspacePage(id: String) -> Element {
                                         WeightSlider {
                                             key: "{criterion.id}",
                                             id: criterion.id.clone(),
-                                            name: criterion.name.clone(),
-                                            description: criterion.description.clone(),
+                                            translations: criterion.translations.clone(),
                                             emoji: criterion.emoji.clone(),
                                             weight: weight_val,
                                             onchange: move |new_val| {
@@ -272,7 +287,7 @@ pub fn WorkspacePage(id: String) -> Element {
                             class: "bg-kr-cytoplasm border border-kr-turquoise p-6 space-y-4 animate-fade-in-down bg-dot-pattern",
                             h4 { class: "font-bold text-kr-text-nucleus text-base font-display flex items-center gap-2",
                                 span { "✨" }
-                                span { "{lang().t(\"Add Product to \")}{lang().tr(&pt.name)}" }
+                                span { "{lang().t(\"Add Product to \")}{tr_name(&pt.translations, &active, &default_locale_val)}" }
                             }
                             div {
                                 class: "grid grid-cols-1 md:grid-cols-2 gap-4",
@@ -356,7 +371,7 @@ pub fn WorkspacePage(id: String) -> Element {
                                                         class: "flex justify-between items-center",
                                                         span { class: "text-xs font-semibold text-kr-text-nucleus flex items-center gap-1.5",
                                                             span { "{crit.emoji}" }
-                                                            span { "{lang().tr(&crit.name)}" }
+                                                            span { "{tr_name(&crit.translations, &active, &default_locale_val)}" }
                                                         }
                                                         span { class: "text-xs font-bold text-kr-turquoise tabular-nums", "{score:.1}" }
                                                     }
@@ -368,7 +383,7 @@ pub fn WorkspacePage(id: String) -> Element {
                                                             if let Ok(val) = e.value().parse::<f64>() {
                                                                 new_product_scores.write().insert(crit.id.clone(), val);
                                                             }
-                                                        }
+                                                        },
                                                     }
                                                 }
                                             }
@@ -404,10 +419,20 @@ pub fn WorkspacePage(id: String) -> Element {
                                                 final_scores.insert(crit.id.clone(), score);
                                             }
 
+                                            // The active UI language is required; other enabled locales
+                                            // are optional and only sent when they have content.
+                                            let active_locale = lang().as_code().to_string();
+                                            let desc_val = new_product_description.read().trim().to_string();
+                                            let mut translations = Vec::new();
+                                            translations.push(TranslationEntry {
+                                                locale: active_locale.clone(),
+                                                name: name_val,
+                                                description: if desc_val.is_empty() { None } else { Some(desc_val) },
+                                            });
+
                                             let payload = NewProductInput {
                                                 product_type_id: pt.id.clone(),
-                                                name: name_val,
-                                                description: new_product_description.read().trim().to_string(),
+                                                translations,
                                                 price: price_val,
                                                 quantity: qty_val,
                                                 unit: unit_val,

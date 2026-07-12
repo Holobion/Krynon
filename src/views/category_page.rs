@@ -1,4 +1,4 @@
-use crate::model::{load_app_data, Product, ProductType};
+use crate::model::{load_app_data, tr_description, tr_name, Product, ProductType};
 use crate::Route;
 use dioxus::prelude::*;
 
@@ -9,6 +9,7 @@ use dioxus::prelude::*;
 #[component]
 pub fn CategoryPage(id: String) -> Element {
     let lang = use_context::<Signal<crate::i18n::Language>>();
+    let default_locale = use_context::<Signal<String>>();
     let mut search_query = use_context::<Signal<String>>();
     let data = use_resource(move || async move { load_app_data(lang().as_code().to_string()).await });
     let cat_id = id.clone();
@@ -34,6 +35,8 @@ pub fn CategoryPage(id: String) -> Element {
                     }
                 },
                 Some(Ok(app_data)) => {
+                    let active = lang().as_code().to_string();
+                    let default_locale_val = default_locale();
                     let categories = app_data.categories.clone();
                     let product_types = app_data.product_types.clone();
                     let products = app_data.products.clone();
@@ -64,8 +67,12 @@ pub fn CategoryPage(id: String) -> Element {
                             } else {
                                 cat_pts.iter()
                                     .filter(|pt| {
-                                        pt.name.to_lowercase().contains(&query_str)
-                                            || pt.description.to_lowercase().contains(&query_str)
+                                        tr_name(&pt.translations, &active, &default_locale_val)
+                                            .to_lowercase()
+                                            .contains(&query_str)
+                                            || tr_description(&pt.translations, &active, &default_locale_val)
+                                                .to_lowercase()
+                                                .contains(&query_str)
                                     })
                                     .cloned()
                                     .collect()
@@ -82,7 +89,9 @@ pub fn CategoryPage(id: String) -> Element {
                                         "{lang().t(\"Workspace\")}"
                                     }
                                     span { class: "text-kr-text-nucleus/30", "/" }
-                                    span { class: "text-kr-text-nucleus font-bold", "{lang().tr(&cat.name)}" }
+                                    span { class: "text-kr-text-nucleus font-bold",
+                                        "{tr_name(&cat.translations, &active, &default_locale_val)}"
+                                    }
                                 }
 
                                 // Category header
@@ -102,11 +111,11 @@ pub fn CategoryPage(id: String) -> Element {
                                         div {
                                             h1 {
                                                 class: "text-3xl font-black text-kr-text-nucleus tracking-tight font-display uppercase leading-tight",
-                                                "{lang().tr(&cat.name)}"
+                                                "{tr_name(&cat.translations, &active, &default_locale_val)}"
                                             }
                                             p {
                                                 class: "font-serif italic text-kr-text-matrix mt-2 leading-relaxed max-w-2xl",
-                                                "{lang().tr(&cat.description)}"
+                                                "{tr_description(&cat.translations, &active, &default_locale_val)}"
                                             }
                                         }
                                     }
@@ -179,14 +188,14 @@ pub fn CategoryPage(id: String) -> Element {
                                     h2 {
                                         class: "text-lg font-bold tracking-widest uppercase font-display",
                                         if search_active {
-                                            "{lang().t(\"Search Results\")}" 
+                                            "{lang().t(\"Search Results\")}"
                                         } else {
-                                            "{lang().t(\"Product Types\")}" 
+                                            "{lang().t(\"Product Types\")}"
                                         }
                                     }
                                     span {
                                         class: "font-mono text-xs text-kr-text-matrix hidden sm:inline",
-                                        "{filtered_cat_pts.len()} {lang().t(\"types\")}" 
+                                        "{filtered_cat_pts.len()} {lang().t(\"types\")}"
                                     }
                                 }
 
@@ -205,11 +214,11 @@ pub fn CategoryPage(id: String) -> Element {
                                         span { class: "text-3xl", "🔍" }
                                         h3 {
                                             class: "text-lg font-bold text-kr-text-nucleus font-display",
-                                            "{lang().t(\"No matches found\")}" 
+                                            "{lang().t(\"No matches found\")}"
                                         }
                                         p {
                                             class: "text-kr-text-matrix font-serif italic text-sm max-w-sm mx-auto",
-                                            "{lang().t(\"No product types match your search.\")}" 
+                                            "{lang().t(\"No product types match your search.\")}"
                                         }
                                         button {
                                             style: "background-color: var(--color-kr-turquoise) !important; color: white !important;",
@@ -217,7 +226,7 @@ pub fn CategoryPage(id: String) -> Element {
                                             onclick: move |_| {
                                                 search_query.set("".to_string());
                                             },
-                                            "{lang().t(\"Clear Search\")}" 
+                                            "{lang().t(\"Clear Search\")}"
                                         }
                                     }
                                 } else {
@@ -271,6 +280,9 @@ fn ProductTypeCard(
     target_id: String,
 ) -> Element {
     let lang = use_context::<Signal<crate::i18n::Language>>();
+    let default_locale = use_context::<Signal<String>>();
+    let active = lang().as_code().to_string();
+    let default_locale_val = default_locale();
 
     rsx! {
         Link {
@@ -285,7 +297,7 @@ fn ProductTypeCard(
                     span { class: "text-base", "{product_type.emoji}" }
                     h3 {
                         class: "font-bold text-kr-text-nucleus group-hover:text-kr-turquoise transition-colors uppercase tracking-wide text-sm font-display",
-                        "{lang().tr(&product_type.name)}"
+                        "{tr_name(&product_type.translations, &active, &default_locale_val)}"
                     }
                 }
                 div {
@@ -310,7 +322,7 @@ fn ProductTypeCard(
                     class: "md:col-span-4 p-5",
                     p {
                         class: "font-serif italic text-xs text-kr-text-matrix leading-relaxed line-clamp-3",
-                        "{lang().tr(&product_type.description)}"
+                        "{tr_description(&product_type.translations, &active, &default_locale_val)}"
                     }
                     // Specific criteria count
                     div {
@@ -379,11 +391,11 @@ fn ProductTypeCard(
                                             }
                                             p {
                                                 class: "text-xs font-bold text-kr-text-nucleus line-clamp-1 font-display",
-                                                "{lang().tr(&product.name)}"
+                                                "{tr_name(&product.translations, &active, &default_locale_val)}"
                                             }
                                             p {
                                                 class: "text-[10px] text-kr-text-matrix line-clamp-1 font-serif italic",
-                                                "{lang().tr(&product.description)}"
+                                                "{tr_description(&product.translations, &active, &default_locale_val)}"
                                             }
                                         }
                                     }

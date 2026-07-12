@@ -1,240 +1,522 @@
-use crate::components::Hero;
-use crate::model::{calculate_score, get_combined_criteria, load_app_data, Product};
 use crate::Route;
 use dioxus::prelude::*;
 
+// ==========================================
+// Stippled SVG Logos (Gray dots, no solids/gradients)
+// ==========================================
+
+#[component]
+fn CriterionLogo() -> Element {
+    rsx! {
+        svg {
+            view_box: "0 0 100 100",
+            class: "w-36 h-36 text-kr-text-nucleus",
+            fill: "currentColor",
+            xmlns: "http://www.w3.org/2000/svg",
+            
+            // Left cluster (Separated facet A)
+            circle { cx: "35", cy: "50", r: "4.5" }
+            circle { cx: "30", cy: "45", r: "3.2" }
+            circle { cx: "40", cy: "42", r: "2.8" }
+            circle { cx: "32", cy: "55", r: "2.5" }
+            circle { cx: "38", cy: "58", r: "2.2" }
+            circle { cx: "25", cy: "50", r: "1.8" }
+            circle { cx: "45", cy: "50", r: "1.5" }
+            circle { cx: "28", cy: "40", r: "1.4" }
+            circle { cx: "42", cy: "62", r: "1.3" }
+            
+            // Right cluster (Separated facet B)
+            circle { cx: "65", cy: "50", r: "4.5" }
+            circle { cx: "70", cy: "55", r: "3.2" }
+            circle { cx: "60", cy: "58", r: "2.8" }
+            circle { cx: "68", cy: "45", r: "2.5" }
+            circle { cx: "62", cy: "42", r: "2.2" }
+            circle { cx: "75", cy: "50", r: "1.8" }
+            circle { cx: "55", cy: "50", r: "1.5" }
+            circle { cx: "72", cy: "60", r: "1.4" }
+            circle { cx: "58", cy: "38", r: "1.3" }
+            
+            // Floating scattered dots in between (Separation line parameter space)
+            circle { cx: "50", cy: "30", r: "0.8" }
+            circle { cx: "50", cy: "70", r: "0.8" }
+            circle { cx: "48", cy: "20", r: "0.6" }
+            circle { cx: "52", cy: "80", r: "0.6" }
+        }
+    }
+}
+
+#[component]
+fn InheritanceLogo() -> Element {
+    rsx! {
+        svg {
+            view_box: "0 0 100 100",
+            class: "w-36 h-36 text-kr-text-nucleus",
+            fill: "currentColor",
+            xmlns: "http://www.w3.org/2000/svg",
+            
+            // Root node (top)
+            circle { cx: "50", cy: "20", r: "5.0" }
+            circle { cx: "47", cy: "17", r: "3.0" }
+            circle { cx: "53", cy: "23", r: "2.5" }
+            
+            // Left branch child
+            circle { cx: "30", cy: "50", r: "4.0" }
+            circle { cx: "27", cy: "47", r: "2.2" }
+            circle { cx: "33", cy: "53", r: "2.0" }
+            
+            // Right branch child
+            circle { cx: "70", cy: "50", r: "4.0" }
+            circle { cx: "67", cy: "53", r: "2.2" }
+            circle { cx: "73", cy: "47", r: "2.0" }
+            
+            // Bottom left children
+            circle { cx: "15", cy: "75", r: "3.0" }
+            circle { cx: "12", cy: "73", r: "1.5" }
+            circle { cx: "40", cy: "75", r: "3.0" }
+            circle { cx: "43", cy: "77", r: "1.5" }
+            
+            // Bottom right children
+            circle { cx: "60", cy: "75", r: "3.0" }
+            circle { cx: "57", cy: "77", r: "1.5" }
+            circle { cx: "85", cy: "75", r: "3.0" }
+            circle { cx: "88", cy: "73", r: "1.5" }
+            
+            // Connecting stippled lines
+            // Top to Left child
+            circle { cx: "45", cy: "28", r: "1.0" }
+            circle { cx: "40", cy: "35", r: "0.9" }
+            circle { cx: "35", cy: "43", r: "1.0" }
+            // Top to Right child
+            circle { cx: "55", cy: "28", r: "1.0" }
+            circle { cx: "60", cy: "35", r: "0.9" }
+            circle { cx: "65", cy: "43", r: "1.0" }
+            // Left to Bottom Left 1
+            circle { cx: "26", cy: "56", r: "0.8" }
+            circle { cx: "22", cy: "63", r: "0.9" }
+            circle { cx: "18", cy: "69", r: "0.8" }
+            // Left to Bottom Left 2
+            circle { cx: "33", cy: "56", r: "0.8" }
+            circle { cx: "36", cy: "63", r: "0.9" }
+            circle { cx: "38", cy: "69", r: "0.8" }
+            // Right to Bottom Right 1
+            circle { cx: "68", cy: "56", r: "0.8" }
+            circle { cx: "65", cy: "63", r: "0.9" }
+            circle { cx: "62", cy: "69", r: "0.8" }
+            // Right to Bottom Right 2
+            circle { cx: "74", cy: "56", r: "0.8" }
+            circle { cx: "78", cy: "63", r: "0.9" }
+            circle { cx: "82", cy: "69", r: "0.8" }
+        }
+    }
+}
+
+#[component]
+fn WeightingLogo() -> Element {
+    rsx! {
+        svg {
+            view_box: "0 0 100 100",
+            class: "w-36 h-36 text-kr-text-nucleus",
+            fill: "currentColor",
+            xmlns: "http://www.w3.org/2000/svg",
+            
+            // Center fulcrum
+            circle { cx: "50", cy: "70", r: "4.0" }
+            circle { cx: "47", cy: "73", r: "2.5" }
+            circle { cx: "53", cy: "73", r: "2.5" }
+            
+            // Central pillar
+            circle { cx: "50", cy: "60", r: "1.2" }
+            circle { cx: "50", cy: "50", r: "1.2" }
+            circle { cx: "50", cy: "40", r: "1.2" }
+            circle { cx: "50", cy: "30", r: "1.5" }
+            
+            // Balance beam (tilted slightly for dynamism)
+            circle { cx: "50", cy: "30", r: "2.5" }
+            circle { cx: "42", cy: "28", r: "1.8" }
+            circle { cx: "34", cy: "26", r: "1.8" }
+            circle { cx: "26", cy: "24", r: "2.2" }
+            circle { cx: "58", cy: "32", r: "1.8" }
+            circle { cx: "66", cy: "34", r: "1.8" }
+            circle { cx: "74", cy: "36", r: "2.2" }
+            
+            // Left scale pan (higher up because it's lighter)
+            circle { cx: "26", cy: "45", r: "3.5" }
+            circle { cx: "22", cy: "43", r: "1.5" }
+            circle { cx: "30", cy: "47", r: "1.5" }
+            // Left scale strings
+            circle { cx: "26", cy: "31", r: "0.8" }
+            circle { cx: "26", cy: "38", r: "0.8" }
+            
+            // Right scale pan (lower down because it's heavier)
+            circle { cx: "74", cy: "65", r: "4.5" }
+            circle { cx: "70", cy: "63", r: "2.0" }
+            circle { cx: "78", cy: "67", r: "2.0" }
+            // Right scale strings
+            circle { cx: "74", cy: "45", r: "0.8" }
+            circle { cx: "74", cy: "55", r: "0.8" }
+        }
+    }
+}
+
+#[component]
+fn ConsensusLogo() -> Element {
+    rsx! {
+        svg {
+            view_box: "0 0 100 100",
+            class: "w-36 h-36 text-kr-text-nucleus",
+            fill: "currentColor",
+            xmlns: "http://www.w3.org/2000/svg",
+            
+            // Central target/bullseye (high density)
+            circle { cx: "50", cy: "50", r: "5.5" }
+            circle { cx: "47", cy: "47", r: "3.5" }
+            circle { cx: "53", cy: "53", r: "3.5" }
+            circle { cx: "53", cy: "47", r: "3.0" }
+            circle { cx: "47", cy: "53", r: "3.0" }
+            
+            // Inner concentric ring
+            circle { cx: "50", cy: "35", r: "1.8" }
+            circle { cx: "65", cy: "50", r: "1.8" }
+            circle { cx: "50", cy: "65", r: "1.8" }
+            circle { cx: "35", cy: "50", r: "1.8" }
+            circle { cx: "39", cy: "39", r: "1.2" }
+            circle { cx: "61", cy: "39", r: "1.2" }
+            circle { cx: "61", cy: "61", r: "1.2" }
+            circle { cx: "39", cy: "61", r: "1.2" }
+            
+            // Outer incoming vectors (converging dots)
+            circle { cx: "50", cy: "20", r: "1.5" }
+            circle { cx: "50", cy: "10", r: "1.0" }
+            
+            circle { cx: "80", cy: "50", r: "1.5" }
+            circle { cx: "90", cy: "50", r: "1.0" }
+            
+            circle { cx: "50", cy: "80", r: "1.5" }
+            circle { cx: "50", cy: "90", r: "1.0" }
+            
+            circle { cx: "20", cy: "50", r: "1.5" }
+            circle { cx: "10", cy: "50", r: "1.0" }
+            
+            // Diagonal vectors
+            circle { cx: "28", cy: "28", r: "1.4" }
+            circle { cx: "20", cy: "20", r: "0.9" }
+            
+            circle { cx: "72", cy: "28", r: "1.4" }
+            circle { cx: "80", cy: "20", r: "0.9" }
+            
+            circle { cx: "72", cy: "72", r: "1.4" }
+            circle { cx: "80", cy: "80", r: "0.9" }
+            
+            circle { cx: "28", cy: "72", r: "1.4" }
+            circle { cx: "20", cy: "80", r: "0.9" }
+        }
+    }
+}
+
+// ==========================================
+// Main Home View
+// ==========================================
+
 #[component]
 pub fn Home() -> Element {
-    let data = use_resource(move || async move { load_app_data().await });
-
-    // Manage active preset index for the mini-demo
-    let mut selected_preset_idx = use_signal(|| 1); // Default to Eco Advocate
-
-    let Some(data_result) = data() else {
-        return rsx! { div { class: "max-w-6xl mx-auto px-6 py-20 text-hb-matrix", "Loading product data..." } };
-    };
-
-    let Ok(data) = data_result else {
-        return rsx! { div { class: "max-w-6xl mx-auto px-6 py-20 text-rose-600", "Failed to load product data." } };
-    };
-
-    let categories = data.categories;
-    let product_types = data.product_types;
-    let products = data.products;
-
-    let Some(smartphone_type) = product_types
-        .iter()
-        .find(|p| p.id == "smartphones")
-        .cloned()
-    else {
-        return rsx! { div { class: "max-w-6xl mx-auto px-6 py-20 text-hb-matrix", "No smartphone product type found." } };
-    };
-
-    if smartphone_type.presets.is_empty() {
-        return rsx! { div { class: "max-w-6xl mx-auto px-6 py-20 text-hb-matrix", "No smartphone presets found." } };
-    }
-
-    let preset_idx = selected_preset_idx().min(smartphone_type.presets.len() - 1);
-    let smartphone_criteria = get_combined_criteria(&smartphone_type, &categories);
-    let smartphone_products: Vec<Product> = products
-        .iter()
-        .filter(|p| p.product_type_id == "smartphones")
-        .cloned()
-        .collect();
-
-    let current_preset = &smartphone_type.presets[preset_idx];
-
-    // Sort products based on active preset weights
-    let mut sorted_products = smartphone_products.clone();
-    sorted_products.sort_by(|a, b| {
-        let score_a = calculate_score(a, &current_preset.weights);
-        let score_b = calculate_score(b, &current_preset.weights);
-        score_b
-            .partial_cmp(&score_a)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-
     rsx! {
         div {
-            class: "pb-20",
+            class: "pb-24 space-y-24",
 
-            // Hero Section
-            Hero {}
-
-            // Interactive Mini-Demo Section
-            div {
-                class: "max-w-6xl mx-auto px-6 py-12 border-t border-hb-matrix/10",
+            // ------------------------------------------
+            // HERO SECTION: Separate criteria. Decide with clarity.
+            // ------------------------------------------
+            section {
+                class: "max-w-6xl mx-auto px-6 pt-16 md:pt-24",
                 div {
-                    class: "text-center max-w-2xl mx-auto mb-10",
-                    h2 { class: "text-3xl font-bold tracking-tight text-hb-nucleus sm:text-4xl font-display", "See It In Action" }
-                    p { class: "mt-3 text-hb-matrix text-sm sm:text-base", "Select a consumer profile below to see how the smartphone ranking dynamically recalculates based on different priorities." }
-                }
+                    class: "grid grid-cols-1 lg:grid-cols-12 gap-12 items-center",
 
-                // Preset selector buttons
-                div {
-                    class: "flex flex-wrap justify-center gap-3 mb-8",
-                    for (idx, preset) in smartphone_type.presets.iter().enumerate() {
-                        {
-                            let is_selected = selected_preset_idx() == idx;
-                            let btn_class = if is_selected {
-                                "bg-hb-primary border-hb-primary text-white shadow-lg hb-halo"
-                            } else {
-                                "bg-hb-cytoplasm border-hb-matrix/20 text-hb-matrix hover:border-hb-primary hover:text-hb-nucleus"
-                            };
-                            rsx! {
-                                button {
-                                    key: "{idx}",
-                                    class: "px-5 py-2.5 rounded-full text-xs sm:text-sm font-bold border transition-all duration-200 {btn_class}",
-                                    onclick: move |_| {
-                                        selected_preset_idx.set(idx);
-                                    },
-                                    "{preset.name}"
-                                }
+                    // Left Column: Massive geometric text
+                    div {
+                        class: "lg:col-span-8 space-y-8 text-left",
+                        div {
+                            class: "font-mono text-xs uppercase tracking-widest text-kr-text-matrix border-l-2 border-kr-text-nucleus pl-3 py-1",
+                            "Krynon Scientific Document // Ref. No. 8023-F"
+                        }
+                        h1 {
+                            class: "text-5xl md:text-7xl font-black text-kr-text-nucleus tracking-tight leading-none uppercase font-display",
+                            "Separate criteria."
+                            br {}
+                            "Decide with clarity."
+                        }
+                        p {
+                            class: "font-serif italic text-lg md:text-2xl text-kr-text-matrix leading-relaxed max-w-2xl",
+                            "\"Krynon is designed to embody its etymological root—krinein. By separating products into their fundamental components and evaluating them systematically, it empowers users to make objective, data-driven decisions based on their exact priorities.\""
+                        }
+                        
+                        // Metadata detail blocks (archival style)
+                        div {
+                            class: "grid grid-cols-2 sm:grid-cols-3 gap-6 pt-4 font-mono text-[11px] uppercase tracking-wider text-kr-text-nucleus border-t-1.5 border-kr-text-nucleus/20",
+                            div {
+                                span { class: "block text-kr-text-matrix", "Engine Status" }
+                                span { class: "font-bold", "Sorting Core Active" }
+                            }
+                            div {
+                                span { class: "block text-kr-text-matrix", "Active Matrices" }
+                                span { class: "font-bold", "Inherited Tree Loaded" }
+                            }
+                            div {
+                                span { class: "block text-kr-text-matrix", "Calculation Mode" }
+                                span { class: "font-bold", "Weighted Average" }
                             }
                         }
                     }
-                }
 
-                // Split demo block
-                div {
-                    class: "grid grid-cols-1 lg:grid-cols-12 gap-8 bg-hb-cytoplasm border border-hb-matrix/10 hb-squarcle p-6 sm:p-8 shadow-sm",
-
-                    // Left Column: Show the weights for this profile
+                    // Right Column: Bento Box with the stippled 'Criterion' logo
                     div {
-                        class: "lg:col-span-5 flex flex-col justify-between space-y-6",
+                        class: "lg:col-span-4 flex justify-center items-center",
                         div {
-                            h3 { class: "text-lg font-bold text-hb-nucleus font-display", "Profile Configuration" }
-                            p { class: "text-xs text-hb-matrix mt-1 leading-relaxed", "The relative weights assigned to each product attribute for this profile (on a scale of 0 to 10):" }
-                        }
-
-                        div {
-                            class: "space-y-4",
-                            for criterion in &smartphone_criteria {
-                                {
-                                    let weight = current_preset.weights.get(&criterion.id).copied().unwrap_or(5.0);
-                                    let percentage = weight * 10.0;
-                                    rsx! {
-                                        div {
-                                            key: "{criterion.id}",
-                                            class: "space-y-1.5",
-                                            div {
-                                                class: "flex justify-between items-center text-xs",
-                                                div {
-                                                    class: "flex items-center gap-1.5 font-medium text-hb-nucleus",
-                                                    span { "{criterion.emoji}" }
-                                                    span { "{criterion.name}" }
-                                                }
-                                                span { class: "font-bold text-hb-primary tabular-nums", "{weight}" }
-                                            }
-                                            div {
-                                                class: "h-2 w-full bg-hb-membrane rounded-full overflow-hidden border border-hb-matrix/10",
-                                                div {
-                                                    class: "h-full bg-hb-primary rounded-full transition-all duration-500",
-                                                    style: "width: {percentage}%"
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+                            class: "w-full max-w-sm aspect-square kr-grid-box flex flex-col justify-between items-center text-center",
+                            div {
+                                class: "w-full text-left font-mono text-[10px] text-kr-text-matrix border-b border-kr-text-nucleus/20 pb-2 mb-4",
+                                "FIG 01. THE CRITERION // EVALUATION FACET"
                             }
-                        }
-
-                        div {
-                            class: "text-xs text-hb-matrix border-t border-hb-matrix/10 pt-4",
-                            span { "🧮 Score Formula: " }
-                            code { class: "text-hb-primary bg-hb-membrane px-1.5 py-0.5 rounded font-mono hb-border-light", "sum(score * weight) / sum(weights)" }
-                        }
-                    }
-
-                    // Right Column: Show the sorted products
-                    div {
-                        class: "lg:col-span-7 space-y-3",
-                        h3 { class: "text-lg font-bold text-hb-nucleus mb-4 font-display", "Resulting Rank Order" }
-
-                        for (rank_idx, product) in sorted_products.iter().take(3).enumerate() {
-                            {
-                                let rank = rank_idx + 1;
-                                let score = calculate_score(product, &current_preset.weights);
-                                let score_rounded = (score * 10.0).round() / 10.0;
-
-                                let (rank_bg, text_highlight) = match rank {
-                                    1 => ("bg-amber-100 text-amber-700 border-amber-200/50", "text-hb-nucleus font-bold"),
-                                    2 => ("bg-slate-100 text-slate-600 border-slate-200/50", "text-hb-nucleus font-bold"),
-                                    3 => ("bg-orange-50 text-orange-700 border-orange-200/50", "text-hb-nucleus"),
-                                    _ => ("bg-hb-membrane text-hb-matrix border-hb-matrix/10", "text-hb-matrix"),
-                                };
-
-                                rsx! {
-                                    div {
-                                        key: "{product.id}",
-                                        class: "flex items-center justify-between p-4 hb-squarcle-sm bg-hb-membrane border border-hb-matrix/10 transition-all duration-300 hover:border-hb-primary/30 hover:bg-hb-cytoplasm shadow-sm",
-                                        div {
-                                            class: "flex items-center gap-3",
-                                            span {
-                                                class: "flex items-center justify-center w-8 h-8 rounded-lg text-sm border font-black {rank_bg}",
-                                                "#{rank}"
-                                            }
-                                            div {
-                                                span { class: "text-sm {text_highlight}", "{product.name}" }
-                                                p { class: "text-[11px] text-hb-matrix line-clamp-1 mt-0.5", "{product.description}" }
-                                            }
-                                        }
-                                        div {
-                                            class: "bg-hb-cytoplasm border border-hb-matrix/10 rounded-xl px-3 py-1.5 text-center shrink-0 shadow-xs",
-                                            span { class: "block text-xs font-black text-hb-primary tabular-nums", "{score_rounded}" }
-                                            span { class: "block text-[9px] uppercase tracking-wider text-hb-matrix font-semibold", "Score" }
-                                        }
-                                    }
-                                }
+                            div {
+                                class: "flex-grow flex items-center justify-center py-6",
+                                CriterionLogo {}
+                            }
+                            div {
+                                class: "w-full border-t border-kr-text-nucleus/20 pt-3 text-center",
+                                p { class: "font-serif italic text-xs text-kr-text-matrix", "Mathematical separation of independent parameter scores." }
                             }
                         }
                     }
                 }
             }
 
-            // Features Grid Section
-            div {
-                class: "max-w-6xl mx-auto px-6 py-16 border-t border-hb-matrix/10 grid grid-cols-1 md:grid-cols-3 gap-8",
-
+            // ------------------------------------------
+            // CONCEPTS SECTION (4-column grid of logo variations)
+            // ------------------------------------------
+            section {
+                id: "phylogeny",
+                class: "max-w-6xl mx-auto px-6",
                 div {
-                    class: "flex flex-col gap-3 p-6 hb-squarcle bg-hb-cytoplasm border border-hb-matrix/10 shadow-sm hover:border-hb-primary/20 hover:scale-[1.01] transition-all duration-300",
-                    span { class: "text-2xl", "🔬" }
-                    h3 { class: "text-lg font-bold text-hb-nucleus font-display", "Granular Classification" }
-                    p { class: "text-hb-matrix text-sm leading-relaxed", "Items are separated into category-specific parameters. We evaluate smartphones on battery life and repair index, but coffee beans on fragrance and body." }
+                    class: "border-b-1.5 border-kr-text-nucleus pb-3 mb-8 flex justify-between items-end",
+                    h2 {
+                        class: "text-2xl font-bold tracking-widest uppercase font-display",
+                        "Taxonomy // Core Concepts"
+                    }
+                    span {
+                        class: "font-mono text-xs text-kr-text-matrix hidden sm:inline",
+                        "ENGINE_MATRIX: V0.7.1"
+                    }
                 }
-
+                
                 div {
-                    class: "flex flex-col gap-3 p-6 hb-squarcle bg-hb-cytoplasm border border-hb-matrix/10 shadow-sm hover:border-hb-primary/20 hover:scale-[1.01] transition-all duration-300",
-                    span { class: "text-2xl", "🎛️" }
-                    h3 { class: "text-lg font-bold text-hb-nucleus font-display", "Custom Weighting" }
-                    p { class: "text-hb-matrix text-sm leading-relaxed", "Define what matters to you. Move sliders to set the importance of each metric and watch the sorting dynamically adjust to your lifestyle." }
-                }
+                    class: "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6",
 
-                div {
-                    class: "flex flex-col gap-3 p-6 hb-squarcle bg-hb-cytoplasm border border-hb-matrix/10 shadow-sm hover:border-hb-primary/20 hover:scale-[1.01] transition-all duration-300",
-                    span { class: "text-2xl", "🛡️" }
-                    h3 { class: "text-lg font-bold text-hb-nucleus font-display", "Zero Marketing Noise" }
-                    p { class: "text-hb-matrix text-sm leading-relaxed", "Cut through sponsored ads and sponsored hype. Krynon uses mathematical models to calculate exact value fits based purely on hard data." }
+                    // Criterion Bento Box
+                    div {
+                        class: "kr-grid-box flex flex-col justify-between p-0",
+                        div { class: "kr-header-bar bg-kr-text-nucleus/5", "Concept 01 // Criterion" }
+                        div {
+                            class: "border-b border-kr-text-nucleus/20 aspect-square flex items-center justify-center p-8 bg-kr-bg-membrane/30",
+                            CriterionLogo {}
+                        }
+                        div {
+                            class: "p-4 space-y-2",
+                            h3 { class: "font-display text-sm font-bold uppercase tracking-wider", "Criterion" }
+                            p {
+                                class: "font-serif italic text-xs text-kr-text-matrix leading-relaxed",
+                                "The fundamental unit of judgment. Separates items into independent, measurable facets rather than merging everything into a single arbitrary score."
+                            }
+                        }
+                    }
+
+                    // Inheritance Bento Box
+                    div {
+                        class: "kr-grid-box flex flex-col justify-between p-0",
+                        div { class: "kr-header-bar bg-kr-text-nucleus/5", "Concept 02 // Inheritance" }
+                        div {
+                            class: "border-b border-kr-text-nucleus/20 aspect-square flex items-center justify-center p-8 bg-kr-bg-membrane/30",
+                            InheritanceLogo {}
+                        }
+                        div {
+                            class: "p-4 space-y-2",
+                            h3 { class: "font-display text-sm font-bold uppercase tracking-wider", "Inheritance" }
+                            p {
+                                class: "font-serif italic text-xs text-kr-text-matrix leading-relaxed",
+                                "Hierarchical structure. Criteria are inherited from parent categories down to specific products, allowing unified comparisons at any abstraction level."
+                            }
+                        }
+                    }
+
+                    // Weighting Bento Box
+                    div {
+                        class: "kr-grid-box flex flex-col justify-between p-0",
+                        div { class: "kr-header-bar bg-kr-text-nucleus/5", "Concept 03 // Weighting" }
+                        div {
+                            class: "border-b border-kr-text-nucleus/20 aspect-square flex items-center justify-center p-8 bg-kr-bg-membrane/30",
+                            WeightingLogo {}
+                        }
+                        div {
+                            class: "p-4 space-y-2",
+                            h3 { class: "font-display text-sm font-bold uppercase tracking-wider", "Weighting" }
+                            p {
+                                class: "font-serif italic text-xs text-kr-text-matrix leading-relaxed",
+                                "Subjective scaling. Users define the priority of each criterion in real-time, allowing the engine's sorting calculations to align with individual needs."
+                            }
+                        }
+                    }
+
+                    // Consensus Bento Box
+                    div {
+                        class: "kr-grid-box flex flex-col justify-between p-0",
+                        div { class: "kr-header-bar bg-kr-text-nucleus/5", "Concept 04 // Consensus" }
+                        div {
+                            class: "border-b border-kr-text-nucleus/20 aspect-square flex items-center justify-center p-8 bg-kr-bg-membrane/30",
+                            ConsensusLogo {}
+                        }
+                        div {
+                            class: "p-4 space-y-2",
+                            h3 { class: "font-display text-sm font-bold uppercase tracking-wider", "Consensus" }
+                            p {
+                                class: "font-serif italic text-xs text-kr-text-matrix leading-relaxed",
+                                "The synthesized decision. Evaluates the multi-criteria scores using a weighted average model, outputting the optimal match value."
+                            }
+                        }
+                    }
                 }
             }
 
-            // Call to Action Card
-            div {
-                class: "max-w-6xl mx-auto px-6 pt-8",
+            // ------------------------------------------
+            // REPOSITORIES SECTION (GitHub Repositories)
+            // ------------------------------------------
+            section {
+                id: "archive",
+                class: "max-w-6xl mx-auto px-6",
                 div {
-                    class: "p-8 sm:p-12 hb-squarcle bg-gradient-to-r from-hb-cytoplasm via-emerald-50/20 to-teal-50/10 border border-hb-primary/10 text-center relative overflow-hidden shadow-sm",
-                    div { class: "absolute -right-24 -bottom-24 w-80 h-80 bg-hb-primary/5 rounded-full blur-3xl -z-10" }
-                    div { class: "absolute -left-24 -top-24 w-80 h-80 bg-teal-500/5 rounded-full blur-3xl -z-10" }
+                    class: "border-b-1.5 border-kr-text-nucleus pb-3 mb-8 flex justify-between items-end",
+                    h2 {
+                        class: "text-2xl font-bold tracking-widest uppercase font-display",
+                        "Engine Repositories // Open Source Components"
+                    }
+                    span {
+                        class: "font-mono text-xs text-kr-text-matrix hidden sm:inline",
+                        "KRYNON_CORE // REPOS"
+                    }
+                }
+                
+                div {
+                    class: "grid grid-cols-1 md:grid-cols-3 gap-6",
 
-                    h2 { class: "text-2xl sm:text-3xl font-extrabold text-hb-nucleus tracking-tight font-display", "Ready to discover your perfect match?" }
-                    p { class: "text-hb-matrix text-sm sm:text-base max-w-xl mx-auto mt-4 leading-relaxed", "Enter the comparison workspace to tweak weights, review detailed product matrices, and find the perfect smartphone, specialty coffee, or running shoe." }
-
+                    // Card 1: K-CORE (Sage Header)
                     div {
-                        class: "mt-8 flex justify-center",
+                        class: "kr-grid-box p-0 flex flex-col justify-between overflow-hidden",
+                        div {
+                            style: "background-color: var(--color-kr-sage);",
+                            class: "kr-header-bar border-b-1.5 border-kr-text-nucleus text-kr-text-nucleus flex justify-between items-center",
+                            span { "REPOSITORY: HOLOBION/K-CORE" }
+                            span { class: "font-mono text-[9px] px-1 border border-kr-text-nucleus bg-kr-membrane/60", "RUST" }
+                        }
+                        div {
+                            class: "p-6 flex flex-col justify-between flex-grow h-[220px]",
+                            div {
+                                class: "space-y-3",
+                                p {
+                                    class: "font-serif italic text-sm text-kr-text-nucleus leading-relaxed",
+                                    "The core rust-based classification engine. Orchestrates sorting algorithms, computes weighted score normalization, and manages criteria registries."
+                                }
+                            }
+                            div {
+                                class: "flex justify-between items-center text-[10px] font-mono border-t border-kr-text-nucleus/15 pt-4 text-kr-text-matrix",
+                                span { "v0.7.1" }
+                                span { "100% COVERAGE" }
+                            }
+                        }
+                    }
+
+                    // Card 2: K-UI (Clay Header)
+                    div {
+                        class: "kr-grid-box p-0 flex flex-col justify-between overflow-hidden",
+                        div {
+                            style: "background-color: var(--color-kr-clay);",
+                            class: "kr-header-bar border-b-1.5 border-kr-text-nucleus text-kr-text-nucleus flex justify-between items-center",
+                            span { "REPOSITORY: HOLOBION/K-UI" }
+                            span { class: "font-mono text-[9px] px-1 border border-kr-text-nucleus bg-kr-membrane/60", "DIOXUS" }
+                        }
+                        div {
+                            class: "p-6 flex flex-col justify-between flex-grow h-[220px]",
+                            div {
+                                class: "space-y-3",
+                                p {
+                                    class: "font-serif italic text-sm text-kr-text-nucleus leading-relaxed",
+                                    "The frontend client interface. Implements the high-performance Swiss grid layout, interactive weight sliders, and criteria creation forms."
+                                }
+                            }
+                            div {
+                                class: "flex justify-between items-center text-[10px] font-mono border-t border-kr-text-nucleus/15 pt-4 text-kr-text-matrix",
+                                span { "v0.7.0" }
+                                span { "WASM HYDRATED" }
+                            }
+                        }
+                    }
+
+                    // Card 3: K-DB (Slate Header)
+                    div {
+                        class: "kr-grid-box p-0 flex flex-col justify-between overflow-hidden",
+                        div {
+                            style: "background-color: var(--color-kr-slate);",
+                            class: "kr-header-bar border-b-1.5 border-kr-text-nucleus text-kr-text-nucleus flex justify-between items-center",
+                            span { "REPOSITORY: HOLOBION/K-DB" }
+                            span { class: "font-mono text-[9px] px-1 border border-kr-text-nucleus bg-kr-membrane/60", "POSTGRES" }
+                        }
+                        div {
+                            class: "p-6 flex flex-col justify-between flex-grow h-[220px]",
+                            div {
+                                class: "space-y-3",
+                                p {
+                                    class: "font-serif italic text-sm text-kr-text-nucleus leading-relaxed",
+                                    "The persistent database layer. Manages product schemas, relational category hierarchies, and criteria definitions using PostgreSQL."
+                                }
+                            }
+                            div {
+                                class: "flex justify-between items-center text-[10px] font-mono border-t border-kr-text-nucleus/15 pt-4 text-kr-text-matrix",
+                                span { "v0.4.2" }
+                                span { "ASYNC STYLED" }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ------------------------------------------
+            // WORKSPACE CALL TO ACTION SECTION (Bento box)
+            // ------------------------------------------
+            section {
+                class: "max-w-6xl mx-auto px-6",
+                div {
+                    class: "kr-grid-box p-0 overflow-hidden grid grid-cols-1 md:grid-cols-12 items-stretch",
+                    
+                    // Left bento cell: Title & Info
+                    div {
+                        class: "md:col-span-8 p-8 md:p-12 space-y-6 flex flex-col justify-center",
+                        div {
+                            class: "font-mono text-xs uppercase tracking-widest text-kr-text-matrix border-l-2 border-kr-text-nucleus pl-3 py-0.5",
+                            "Analytical Workspace // Criteria Filter"
+                        }
+                        h2 {
+                            class: "text-3xl md:text-4xl font-bold tracking-tight text-kr-text-nucleus uppercase font-display",
+                            "Execute Criteria-Based Sorting"
+                        }
+                        p {
+                            class: "font-serif italic text-base text-kr-text-matrix leading-relaxed max-w-xl",
+                            "Initialize the comparison workspace to compute weight matrices, evaluate product fitness scores, and discover the optimal choices."
+                        }
+                    }
+
+                    // Right bento cell: Navigation Button
+                    div {
+                        class: "md:col-span-4 p-8 md:p-12 border-t-1.5 md:border-t-0 md:border-l-1.5 border-kr-text-nucleus flex items-center justify-center bg-kr-text-nucleus/5",
                         Link {
                             to: Route::Compare {},
-                            class: "hb-btn-pill px-8 py-4 text-center text-white shadow-md shadow-hb-primary/10 active:scale-[0.98]",
-                            "Launch Compare Engine 🚀"
+                            class: "kr-btn-pill px-8 py-4 text-center text-sm font-bold w-full uppercase transition-all duration-300",
+                            "Initialize Workspace →"
                         }
                     }
                 }

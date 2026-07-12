@@ -43,6 +43,14 @@ pub fn Compare() -> Element {
     let mut temp_crit_desc = use_signal(|| "".to_string());
     let mut temp_crit_emoji = use_signal(|| "".to_string());
 
+    let mut show_add_product_form = use_signal(|| false);
+    let mut new_product_name = use_signal(|| "".to_string());
+    let mut new_product_price = use_signal(|| "".to_string());
+    let mut new_product_quantity = use_signal(|| "".to_string());
+    let mut new_product_unit = use_signal(|| "".to_string());
+    let mut new_product_description = use_signal(|| "".to_string());
+    let mut new_product_scores = use_signal(HashMap::<String, f64>::new);
+
     // Initial weights setup. Populated once DB data is loaded.
     let mut weights = use_signal(HashMap::<String, f64>::new);
 
@@ -98,7 +106,7 @@ pub fn Compare() -> Element {
     }
 
     if categories.read().is_empty() || product_types.read().is_empty() {
-        return rsx! { div { class: "max-w-6xl mx-auto px-6 py-20 text-hb-matrix", "Loading product data..." } };
+        return rsx! { div { class: "max-w-6xl mx-auto px-6 py-20 text-kr-matrix", "Loading product data..." } };
     }
 
     // Get active entities and active criteria
@@ -229,16 +237,21 @@ pub fn Compare() -> Element {
     };
 
     let prod_type_btn_class = if workspace_mode() == WorkspaceMode::ProductType {
-        "bg-hb-primary text-white shadow-md hb-halo"
+        "bg-kr-primary text-white shadow-md kr-halo"
     } else {
-        "text-hb-matrix hover:text-hb-nucleus"
+        "text-kr-matrix hover:text-kr-nucleus"
     };
 
     let category_btn_class = if workspace_mode() == WorkspaceMode::Category {
-        "bg-hb-primary text-white shadow-md hb-halo"
+        "bg-kr-primary text-white shadow-md kr-halo"
     } else {
-        "text-hb-matrix hover:text-hb-nucleus"
+        "text-kr-matrix hover:text-kr-nucleus"
     };
+
+    let active_criteria_for_reset = active_criteria.clone();
+    let active_criteria_for_sliders = active_criteria.clone();
+    let active_criteria_for_save = active_criteria.clone();
+    let active_criteria_for_cards = active_criteria.clone();
 
     rsx! {
         div {
@@ -248,13 +261,13 @@ pub fn Compare() -> Element {
             div {
                 class: "flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8",
                 div {
-                    h1 { class: "text-3xl font-black text-hb-nucleus tracking-tight font-display", "Classification Workspace" }
-                    p { class: "text-hb-matrix text-sm mt-1", "Inherit global criteria, configure custom weights, and perform deep comparative ranking." }
+                    h1 { class: "text-3xl font-black text-kr-nucleus tracking-tight font-display", "Classification Workspace" }
+                    p { class: "text-kr-matrix text-sm mt-1", "Inherit global criteria, configure custom weights, and perform deep comparative ranking." }
                 }
 
                 // Workspace Mode Toggle
                 div {
-                    class: "flex bg-hb-cytoplasm border border-hb-matrix/20 p-1 rounded-full shrink-0 shadow-sm",
+                    class: "flex bg-kr-cytoplasm border border-kr-matrix/20 p-1 rounded-full shrink-0 shadow-sm",
                     button {
                         class: "px-5 py-2 rounded-full text-xs font-bold transition-all {prod_type_btn_class}",
                         onclick: move |_| {
@@ -276,10 +289,10 @@ pub fn Compare() -> Element {
             div {
                 class: "mb-8",
                 div {
-                    class: "relative flex items-center bg-hb-cytoplasm border border-hb-matrix/10 focus-within:border-hb-primary rounded-2xl px-5 py-4 text-hb-matrix focus-within:text-hb-nucleus transition-all shadow-sm",
+                    class: "relative flex items-center bg-kr-cytoplasm border border-kr-matrix/10 focus-within:border-kr-primary rounded-2xl px-5 py-4 text-kr-matrix focus-within:text-kr-nucleus transition-all shadow-sm",
                     // Large magnifying glass icon
                     svg {
-                        class: "w-6 h-6 mr-4 shrink-0 text-hb-matrix/60",
+                        class: "w-6 h-6 mr-4 shrink-0 text-kr-matrix/60",
                         fill: "none",
                         stroke: "currentColor",
                         view_box: "0 0 24 24",
@@ -291,7 +304,7 @@ pub fn Compare() -> Element {
                         }
                     }
                     input {
-                        class: "bg-transparent border-none outline-none text-base sm:text-lg w-full text-hb-nucleus placeholder-hb-matrix/60 font-medium",
+                        class: "bg-transparent border-none outline-none text-base sm:text-lg w-full text-kr-nucleus placeholder-kr-matrix/60 font-medium",
                         value: "{search_query}",
                         placeholder: "Search product types or categories (e.g. coffee, technology)...",
                         oninput: move |e| {
@@ -300,7 +313,7 @@ pub fn Compare() -> Element {
                     }
                     if !search_query.read().is_empty() {
                         button {
-                            class: "hover:text-hb-primary text-hb-matrix transition-colors p-1",
+                            class: "hover:text-kr-primary text-kr-matrix transition-colors p-1",
                             onclick: move |_| {
                                 search_query.set("".to_string());
                             },
@@ -329,21 +342,21 @@ pub fn Compare() -> Element {
 
                     div {
                         class: "flex justify-between items-center px-1",
-                        h3 { class: "text-xs font-bold text-hb-matrix uppercase tracking-widest font-display", "Search Results" }
+                        h3 { class: "text-xs font-bold text-kr-matrix uppercase tracking-widest font-display", "Search Results" }
                         span {
-                            class: "text-xs text-hb-matrix font-semibold",
+                            class: "text-xs text-kr-matrix font-semibold",
                             "{matched_categories.len() + matched_product_types.len()} results found"
                         }
                     }
 
                     if matched_categories.is_empty() && matched_product_types.is_empty() {
                         div {
-                            class: "flex flex-col items-center justify-center py-16 px-6 text-center bg-hb-cytoplasm border border-hb-matrix/10 hb-squarcle space-y-4 shadow-sm",
+                            class: "flex flex-col items-center justify-center py-16 px-6 text-center bg-kr-cytoplasm border border-kr-matrix/10 kr-squarcle space-y-4 shadow-sm",
                             span { class: "text-4xl", "🔍" }
-                            h4 { class: "text-lg font-bold text-hb-nucleus", "No matches found" }
-                            p { class: "text-hb-matrix text-xs max-w-sm leading-relaxed", "We couldn't find any category or product type matching \"{search_query}\". Try searching for 'coffee', 'rice', 'tech', or 'office'." }
+                            h4 { class: "text-lg font-bold text-kr-nucleus", "No matches found" }
+                            p { class: "text-kr-matrix text-xs max-w-sm leading-relaxed", "We couldn't find any category or product type matching \"{search_query}\". Try searching for 'coffee', 'rice', 'tech', or 'office'." }
                             button {
-                                class: "hb-btn-pill px-5 py-2.5 text-white active:scale-95 text-xs shadow-md shadow-hb-primary/10",
+                                class: "kr-btn-pill px-5 py-2.5 text-white active:scale-95 text-xs shadow-md shadow-kr-primary/10",
                                 onclick: move |_| {
                                     search_query.set("".to_string());
                                 },
@@ -358,7 +371,7 @@ pub fn Compare() -> Element {
                             for (idx, cat) in matched_categories {
                                 div {
                                     key: "cat-{cat.id}",
-                                    class: "bg-hb-cytoplasm hover:bg-hb-membrane border border-hb-matrix/10 hover:border-hb-primary/35 p-5 hb-squarcle cursor-pointer transition-all duration-200 group flex justify-between items-center shadow-xs",
+                                    class: "bg-kr-cytoplasm hover:bg-kr-membrane border border-kr-matrix/10 hover:border-kr-primary/35 p-5 kr-squarcle cursor-pointer transition-all duration-200 group flex justify-between items-center shadow-xs",
                                     onclick: move |_| {
                                         workspace_mode.set(WorkspaceMode::Category);
                                         selected_category_idx.set(idx);
@@ -369,16 +382,16 @@ pub fn Compare() -> Element {
                                         div {
                                             class: "flex flex-wrap items-center gap-2",
                                             span { class: "text-lg", "{cat.emoji}" }
-                                            h4 { class: "font-bold text-hb-nucleus group-hover:text-hb-primary transition-colors font-display", "{cat.name}" }
+                                            h4 { class: "font-bold text-kr-nucleus group-hover:text-kr-primary transition-colors font-display", "{cat.name}" }
                                             span {
                                                 class: "text-[9px] uppercase font-extrabold px-2 py-0.5 rounded bg-emerald-100 border border-emerald-200/50 text-emerald-700 tracking-wider",
                                                 "Category Benchmark"
                                             }
                                         }
-                                        p { class: "text-hb-matrix text-xs mt-1 line-clamp-1", "{cat.description}" }
+                                        p { class: "text-kr-matrix text-xs mt-1 line-clamp-1", "{cat.description}" }
                                     }
                                     span {
-                                        class: "text-hb-matrix group-hover:text-hb-primary group-hover:translate-x-1 transition-all text-xs font-bold shrink-0",
+                                        class: "text-kr-matrix group-hover:text-kr-primary group-hover:translate-x-1 transition-all text-xs font-bold shrink-0",
                                         "Go to Benchmark ➔"
                                     }
                                 }
@@ -388,7 +401,7 @@ pub fn Compare() -> Element {
                             for (idx, pt) in matched_product_types {
                                 div {
                                     key: "pt-{pt.id}",
-                                    class: "bg-hb-cytoplasm hover:bg-hb-membrane border border-hb-matrix/10 hover:border-hb-primary/35 p-5 hb-squarcle cursor-pointer transition-all duration-200 group flex justify-between items-center shadow-xs",
+                                    class: "bg-kr-cytoplasm hover:bg-kr-membrane border border-kr-matrix/10 hover:border-kr-primary/35 p-5 kr-squarcle cursor-pointer transition-all duration-200 group flex justify-between items-center shadow-xs",
                                     onclick: move |_| {
                                         workspace_mode.set(WorkspaceMode::ProductType);
                                         selected_prod_type_idx.set(idx);
@@ -399,16 +412,16 @@ pub fn Compare() -> Element {
                                         div {
                                             class: "flex flex-wrap items-center gap-2",
                                             span { class: "text-lg", "{pt.emoji}" }
-                                            h4 { class: "font-bold text-hb-nucleus group-hover:text-hb-primary transition-colors font-display", "{pt.name}" }
+                                            h4 { class: "font-bold text-kr-nucleus group-hover:text-kr-primary transition-colors font-display", "{pt.name}" }
                                             span {
-                                                class: "text-[9px] uppercase font-extrabold px-2 py-0.5 rounded bg-hb-primary/10 border border-hb-primary/20 text-hb-primary tracking-wider",
+                                                class: "text-[9px] uppercase font-extrabold px-2 py-0.5 rounded bg-kr-primary/10 border border-kr-primary/20 text-kr-primary tracking-wider",
                                                 "Product Type Workspace"
                                             }
                                         }
-                                        p { class: "text-hb-matrix text-xs mt-1 line-clamp-1", "{pt.description}" }
+                                        p { class: "text-kr-matrix text-xs mt-1 line-clamp-1", "{pt.description}" }
                                     }
                                     span {
-                                        class: "text-hb-matrix group-hover:text-hb-primary group-hover:translate-x-1 transition-all text-xs font-bold shrink-0",
+                                        class: "text-kr-matrix group-hover:text-kr-primary group-hover:translate-x-1 transition-all text-xs font-bold shrink-0",
                                         "Go to Workspace ➔"
                                     }
                                 }
@@ -419,19 +432,19 @@ pub fn Compare() -> Element {
                     // Dynamic creation option at the bottom of the results
                     if creation_mode() == CreationMode::None {
                         div {
-                            class: "bg-hb-cytoplasm border border-hb-matrix/10 p-6 hb-squarcle shadow-md space-y-4 border-dashed border-2 hover:border-hb-primary/30 transition-all",
+                            class: "bg-kr-cytoplasm border border-kr-matrix/10 p-6 kr-squarcle shadow-md space-y-4 border-dashed border-2 hover:border-kr-primary/30 transition-all",
                             div {
                                 class: "flex items-start gap-4",
-                                span { class: "text-2xl p-2 bg-hb-membrane rounded-xl", "✨" }
+                                span { class: "text-2xl p-2 bg-kr-membrane rounded-xl", "✨" }
                                 div {
-                                    h4 { class: "font-bold text-hb-nucleus font-display", "Can't find what you need?" }
-                                    p { class: "text-hb-matrix text-xs mt-1 leading-relaxed", "Define a custom Category or Product Type with your own criteria to evaluate products." }
+                                    h4 { class: "font-bold text-kr-nucleus font-display", "Can't find what you need?" }
+                                    p { class: "text-kr-matrix text-xs mt-1 leading-relaxed", "Define a custom Category or Product Type with your own criteria to evaluate products." }
                                 }
                             }
                             div {
                                 class: "flex flex-wrap gap-3 pt-2",
                                 button {
-                                    class: "px-4 py-2 bg-hb-primary hover:bg-hb-primary/95 text-white text-xs font-bold rounded-lg transition-all active:scale-95 shadow-sm",
+                                    class: "px-4 py-2 bg-kr-primary hover:bg-kr-primary/95 text-white text-xs font-bold rounded-lg transition-all active:scale-95 shadow-sm",
                                     onclick: move |_| {
                                         new_name.set(search_query());
                                         new_description.set("".to_string());
@@ -443,7 +456,7 @@ pub fn Compare() -> Element {
                                     "Create Category"
                                 }
                                 button {
-                                    class: "px-4 py-2 bg-hb-membrane hover:bg-hb-cytoplasm border border-hb-matrix/20 hover:border-hb-primary/30 text-hb-nucleus text-xs font-bold rounded-lg transition-all active:scale-95 shadow-xs",
+                                    class: "px-4 py-2 bg-kr-membrane hover:bg-kr-cytoplasm border border-kr-matrix/20 hover:border-kr-primary/30 text-kr-nucleus text-xs font-bold rounded-lg transition-all active:scale-95 shadow-xs",
                                     onclick: move |_| {
                                         new_name.set(search_query());
                                         new_description.set("".to_string());
@@ -461,18 +474,18 @@ pub fn Compare() -> Element {
 
                     if creation_mode() == CreationMode::Category {
                         div {
-                            class: "bg-hb-cytoplasm border border-hb-primary/35 p-6 hb-squarcle shadow-lg space-y-6 animate-fade-in-down",
+                            class: "bg-kr-cytoplasm border border-kr-primary/35 p-6 kr-squarcle shadow-lg space-y-6 animate-fade-in-down",
                             div {
-                                class: "flex justify-between items-center border-b border-hb-matrix/10 pb-4",
+                                class: "flex justify-between items-center border-b border-kr-matrix/10 pb-4",
                                 div {
-                                    h3 { class: "font-bold text-hb-nucleus text-lg font-display flex items-center gap-2",
+                                    h3 { class: "font-bold text-kr-nucleus text-lg font-display flex items-center gap-2",
                                         span { "📂" }
                                         span { "Create New Category" }
                                     }
-                                    p { class: "text-hb-matrix text-xs mt-0.5", "Define a new evaluation category." }
+                                    p { class: "text-kr-matrix text-xs mt-0.5", "Define a new evaluation category." }
                                 }
                                 button {
-                                    class: "text-hb-matrix hover:text-hb-nucleus text-xs font-bold",
+                                    class: "text-kr-matrix hover:text-kr-nucleus text-xs font-bold",
                                     onclick: move |_| {
                                         creation_mode.set(CreationMode::None);
                                     },
@@ -488,18 +501,18 @@ pub fn Compare() -> Element {
                                     class: "grid grid-cols-4 gap-4",
                                     div {
                                         class: "col-span-1 space-y-1.5",
-                                        label { class: "text-xs font-bold text-hb-matrix", "Emoji" }
+                                        label { class: "text-xs font-bold text-kr-matrix", "Emoji" }
                                         input {
-                                            class: "bg-hb-membrane border border-hb-matrix/10 rounded-xl px-4 py-2.5 text-center text-lg w-full focus:outline-none focus:border-hb-primary text-hb-nucleus",
+                                            class: "bg-kr-membrane border border-kr-matrix/10 rounded-xl px-4 py-2.5 text-center text-lg w-full focus:outline-none focus:border-kr-primary text-kr-nucleus",
                                             value: "{new_emoji}",
                                             oninput: move |e| new_emoji.set(e.value()),
                                         }
                                     }
                                     div {
                                         class: "col-span-3 space-y-1.5",
-                                        label { class: "text-xs font-bold text-hb-matrix", "Category Name" }
+                                        label { class: "text-xs font-bold text-kr-matrix", "Category Name" }
                                         input {
-                                            class: "bg-hb-membrane border border-hb-matrix/10 rounded-xl px-4 py-2.5 text-sm w-full focus:outline-none focus:border-hb-primary text-hb-nucleus font-medium",
+                                            class: "bg-kr-membrane border border-kr-matrix/10 rounded-xl px-4 py-2.5 text-sm w-full focus:outline-none focus:border-kr-primary text-kr-nucleus font-medium",
                                             placeholder: "e.g., Household Appliances",
                                             value: "{new_name}",
                                             oninput: move |e| new_name.set(e.value()),
@@ -509,9 +522,9 @@ pub fn Compare() -> Element {
 
                                 div {
                                     class: "space-y-1.5",
-                                    label { class: "text-xs font-bold text-hb-matrix", "Description" }
+                                    label { class: "text-xs font-bold text-kr-matrix", "Description" }
                                     textarea {
-                                        class: "bg-hb-membrane border border-hb-matrix/10 rounded-xl px-4 py-2.5 text-sm w-full h-20 focus:outline-none focus:border-hb-primary text-hb-nucleus resize-none",
+                                        class: "bg-kr-membrane border border-kr-matrix/10 rounded-xl px-4 py-2.5 text-sm w-full h-20 focus:outline-none focus:border-kr-primary text-kr-nucleus resize-none",
                                         placeholder: "Explain what this category evaluates...",
                                         value: "{new_description}",
                                         oninput: move |e| new_description.set(e.value()),
@@ -521,9 +534,9 @@ pub fn Compare() -> Element {
                                 // Choose from existing criteria
                                 div {
                                     class: "space-y-2",
-                                    label { class: "text-xs font-bold text-hb-matrix block", "Inherit Existing Criteria" }
+                                    label { class: "text-xs font-bold text-kr-matrix block", "Inherit Existing Criteria" }
                                     div {
-                                        class: "grid grid-cols-1 md:grid-cols-2 gap-2 bg-hb-membrane p-4 rounded-xl border border-hb-matrix/10 max-h-48 overflow-y-auto",
+                                        class: "grid grid-cols-1 md:grid-cols-2 gap-2 bg-kr-membrane p-4 rounded-xl border border-kr-matrix/10 max-h-48 overflow-y-auto",
                                         {
                                             let all_existing_criteria = {
                                                 let mut map = HashMap::new();
@@ -548,7 +561,7 @@ pub fn Compare() -> Element {
                                                 rsx! {
                                                     div {
                                                         key: "{crit.id}",
-                                                        class: "flex items-start gap-2.5 p-2 rounded-lg hover:bg-hb-cytoplasm cursor-pointer transition-colors text-xs text-hb-nucleus",
+                                                        class: "flex items-start gap-2.5 p-2 rounded-lg hover:bg-kr-cytoplasm cursor-pointer transition-colors text-xs text-kr-nucleus",
                                                         onclick: move |_| {
                                                             let mut list = selected_criteria.read().clone();
                                                             if list.contains(&crit_id_clone) {
@@ -560,7 +573,7 @@ pub fn Compare() -> Element {
                                                         },
                                                         input {
                                                             type: "checkbox",
-                                                            class: "mt-0.5 accent-hb-primary",
+                                                            class: "mt-0.5 accent-kr-primary",
                                                             checked: is_selected,
                                                             readonly: true,
                                                         }
@@ -578,8 +591,8 @@ pub fn Compare() -> Element {
 
                                 // Create & add a custom criteria inline
                                 div {
-                                    class: "space-y-3 border-t border-hb-matrix/10 pt-4",
-                                    label { class: "text-xs font-bold text-hb-matrix block", "Add Custom Criteria" }
+                                    class: "space-y-3 border-t border-kr-matrix/10 pt-4",
+                                    label { class: "text-xs font-bold text-kr-matrix block", "Add Custom Criteria" }
 
                                     // Custom criteria list added so far
                                     if !custom_criteria.read().is_empty() {
@@ -588,12 +601,12 @@ pub fn Compare() -> Element {
                                             for crit in custom_criteria.read().iter() {
                                                 div {
                                                     key: "{crit.id}",
-                                                    class: "flex justify-between items-center bg-hb-membrane px-3 py-2 rounded-lg text-xs text-hb-nucleus border border-hb-matrix/5",
+                                                    class: "flex justify-between items-center bg-kr-membrane px-3 py-2 rounded-lg text-xs text-kr-nucleus border border-kr-matrix/5",
                                                     div {
                                                         class: "flex items-center gap-2",
                                                         span { "{crit.emoji}" }
                                                         span { class: "font-bold", "{crit.name}" }
-                                                        span { class: "text-hb-matrix text-[10px]", "- {crit.description}" }
+                                                        span { class: "text-kr-matrix text-[10px]", "- {crit.description}" }
                                                     }
                                                     button {
                                                         class: "text-rose-500 hover:text-rose-700 font-bold",
@@ -612,14 +625,14 @@ pub fn Compare() -> Element {
 
                                     // Form fields to add a custom criterion
                                     div {
-                                        class: "bg-hb-membrane p-4 rounded-xl border border-hb-matrix/10 space-y-3",
+                                        class: "bg-kr-membrane p-4 rounded-xl border border-kr-matrix/10 space-y-3",
                                         div {
                                             class: "grid grid-cols-4 gap-3",
                                             div {
                                                 class: "col-span-1 space-y-1",
-                                                label { class: "text-[10px] font-bold text-hb-matrix", "Emoji" }
+                                                label { class: "text-[10px] font-bold text-kr-matrix", "Emoji" }
                                                 input {
-                                                    class: "bg-hb-cytoplasm border border-hb-matrix/10 rounded-lg px-2.5 py-1.5 text-center text-sm w-full focus:outline-none focus:border-hb-primary text-hb-nucleus",
+                                                    class: "bg-kr-cytoplasm border border-kr-matrix/10 rounded-lg px-2.5 py-1.5 text-center text-sm w-full focus:outline-none focus:border-kr-primary text-kr-nucleus",
                                                     placeholder: "✨",
                                                     value: "{temp_crit_emoji}",
                                                     oninput: move |e| temp_crit_emoji.set(e.value()),
@@ -627,9 +640,9 @@ pub fn Compare() -> Element {
                                             }
                                             div {
                                                 class: "col-span-3 space-y-1",
-                                                label { class: "text-[10px] font-bold text-hb-matrix", "Criterion Name" }
+                                                label { class: "text-[10px] font-bold text-kr-matrix", "Criterion Name" }
                                                 input {
-                                                    class: "bg-hb-cytoplasm border border-hb-matrix/10 rounded-lg px-3 py-1.5 text-xs w-full focus:outline-none focus:border-hb-primary text-hb-nucleus font-medium",
+                                                    class: "bg-kr-cytoplasm border border-kr-matrix/10 rounded-lg px-3 py-1.5 text-xs w-full focus:outline-none focus:border-kr-primary text-kr-nucleus font-medium",
                                                     placeholder: "e.g., Water Conservation",
                                                     value: "{temp_crit_name}",
                                                     oninput: move |e| temp_crit_name.set(e.value()),
@@ -638,9 +651,9 @@ pub fn Compare() -> Element {
                                         }
                                         div {
                                             class: "space-y-1",
-                                            label { class: "text-[10px] font-bold text-hb-matrix", "Criterion Description" }
+                                            label { class: "text-[10px] font-bold text-kr-matrix", "Criterion Description" }
                                             input {
-                                                class: "bg-hb-cytoplasm border border-hb-matrix/10 rounded-lg px-3 py-1.5 text-xs w-full focus:outline-none focus:border-hb-primary text-hb-nucleus",
+                                                class: "bg-kr-cytoplasm border border-kr-matrix/10 rounded-lg px-3 py-1.5 text-xs w-full focus:outline-none focus:border-kr-primary text-kr-nucleus",
                                                 placeholder: "e.g., Gallons of water saved during production...",
                                                 value: "{temp_crit_desc}",
                                                 oninput: move |e| temp_crit_desc.set(e.value()),
@@ -648,7 +661,7 @@ pub fn Compare() -> Element {
                                         }
                                         button {
                                             type: "button",
-                                            class: "px-3 py-1.5 bg-hb-nucleus hover:bg-black text-white text-xs font-bold rounded-lg transition-all active:scale-95 shadow-xs w-full",
+                                            class: "px-3 py-1.5 bg-kr-nucleus hover:bg-black text-white text-xs font-bold rounded-lg transition-all active:scale-95 shadow-xs w-full",
                                             onclick: move |_| {
                                                 let name_val = temp_crit_name.read().trim().to_string();
                                                 let desc_val = temp_crit_desc.read().trim().to_string();
@@ -680,16 +693,16 @@ pub fn Compare() -> Element {
 
                             // Save button
                             div {
-                                class: "flex justify-end gap-3 border-t border-hb-matrix/10 pt-4",
+                                class: "flex justify-end gap-3 border-t border-kr-matrix/10 pt-4",
                                 button {
-                                    class: "px-5 py-2.5 bg-hb-membrane hover:bg-hb-cytoplasm border border-hb-matrix/20 text-hb-nucleus text-xs font-bold rounded-lg transition-all active:scale-95",
+                                    class: "px-5 py-2.5 bg-kr-membrane hover:bg-kr-cytoplasm border border-kr-matrix/20 text-kr-nucleus text-xs font-bold rounded-lg transition-all active:scale-95",
                                     onclick: move |_| {
                                         creation_mode.set(CreationMode::None);
                                     },
                                     "Cancel"
                                 }
                                 button {
-                                    class: "hb-btn-pill px-6 py-2.5 text-white active:scale-95 text-xs shadow-md shadow-hb-primary/10",
+                                    class: "kr-btn-pill px-6 py-2.5 text-white active:scale-95 text-xs shadow-md shadow-kr-primary/10",
                                     onclick: move |_| {
                                         let name_val = new_name.read().trim().to_string();
                                         if !name_val.is_empty() {
@@ -746,18 +759,18 @@ pub fn Compare() -> Element {
 
                     if creation_mode() == CreationMode::ProductType {
                         div {
-                            class: "bg-hb-cytoplasm border border-hb-primary/35 p-6 hb-squarcle shadow-lg space-y-6 animate-fade-in-down",
+                            class: "bg-kr-cytoplasm border border-kr-primary/35 p-6 kr-squarcle shadow-lg space-y-6 animate-fade-in-down",
                             div {
-                                class: "flex justify-between items-center border-b border-hb-matrix/10 pb-4",
+                                class: "flex justify-between items-center border-b border-kr-matrix/10 pb-4",
                                 div {
-                                    h3 { class: "font-bold text-hb-nucleus text-lg font-display flex items-center gap-2",
+                                    h3 { class: "font-bold text-kr-nucleus text-lg font-display flex items-center gap-2",
                                         span { "📦" }
                                         span { "Create New Product Type" }
                                     }
-                                    p { class: "text-hb-matrix text-xs mt-0.5", "Establish a product type inheriting from categories." }
+                                    p { class: "text-kr-matrix text-xs mt-0.5", "Establish a product type inheriting from categories." }
                                 }
                                 button {
-                                    class: "text-hb-matrix hover:text-hb-nucleus text-xs font-bold",
+                                    class: "text-kr-matrix hover:text-kr-nucleus text-xs font-bold",
                                     onclick: move |_| {
                                         creation_mode.set(CreationMode::None);
                                     },
@@ -773,18 +786,18 @@ pub fn Compare() -> Element {
                                     class: "grid grid-cols-4 gap-4",
                                     div {
                                         class: "col-span-1 space-y-1.5",
-                                        label { class: "text-xs font-bold text-hb-matrix", "Emoji" }
+                                        label { class: "text-xs font-bold text-kr-matrix", "Emoji" }
                                         input {
-                                            class: "bg-hb-membrane border border-hb-matrix/10 rounded-xl px-4 py-2.5 text-center text-lg w-full focus:outline-none focus:border-hb-primary text-hb-nucleus",
+                                            class: "bg-kr-membrane border border-kr-matrix/10 rounded-xl px-4 py-2.5 text-center text-lg w-full focus:outline-none focus:border-kr-primary text-kr-nucleus",
                                             value: "{new_emoji}",
                                             oninput: move |e| new_emoji.set(e.value()),
                                         }
                                     }
                                     div {
                                         class: "col-span-3 space-y-1.5",
-                                        label { class: "text-xs font-bold text-hb-matrix", "Product Type Name" }
+                                        label { class: "text-xs font-bold text-kr-matrix", "Product Type Name" }
                                         input {
-                                            class: "bg-hb-membrane border border-hb-matrix/10 rounded-xl px-4 py-2.5 text-sm w-full focus:outline-none focus:border-hb-primary text-hb-nucleus font-medium",
+                                            class: "bg-kr-membrane border border-kr-matrix/10 rounded-xl px-4 py-2.5 text-sm w-full focus:outline-none focus:border-kr-primary text-kr-nucleus font-medium",
                                             placeholder: "e.g., Air Purifiers",
                                             value: "{new_name}",
                                             oninput: move |e| new_name.set(e.value()),
@@ -794,9 +807,9 @@ pub fn Compare() -> Element {
 
                                 div {
                                     class: "space-y-1.5",
-                                    label { class: "text-xs font-bold text-hb-matrix", "Description" }
+                                    label { class: "text-xs font-bold text-kr-matrix", "Description" }
                                     textarea {
-                                        class: "bg-hb-membrane border border-hb-matrix/10 rounded-xl px-4 py-2.5 text-sm w-full h-20 focus:outline-none focus:border-hb-primary text-hb-nucleus resize-none",
+                                        class: "bg-kr-membrane border border-kr-matrix/10 rounded-xl px-4 py-2.5 text-sm w-full h-20 focus:outline-none focus:border-kr-primary text-kr-nucleus resize-none",
                                         placeholder: "Explain what this product type evaluates...",
                                         value: "{new_description}",
                                         oninput: move |e| new_description.set(e.value()),
@@ -806,9 +819,9 @@ pub fn Compare() -> Element {
                                 // Choose categories (for inheritance of criteria)
                                 div {
                                     class: "space-y-2",
-                                    label { class: "text-xs font-bold text-hb-matrix block", "Parent Categories (Inherit Criteria)" }
+                                    label { class: "text-xs font-bold text-kr-matrix block", "Parent Categories (Inherit Criteria)" }
                                     div {
-                                        class: "grid grid-cols-1 md:grid-cols-2 gap-2 bg-hb-membrane p-4 rounded-xl border border-hb-matrix/10 max-h-40 overflow-y-auto",
+                                        class: "grid grid-cols-1 md:grid-cols-2 gap-2 bg-kr-membrane p-4 rounded-xl border border-kr-matrix/10 max-h-40 overflow-y-auto",
                                         for cat in categories.read().iter() {
                                             {
                                                 let is_selected = selected_categories.read().contains(&cat.id);
@@ -816,7 +829,7 @@ pub fn Compare() -> Element {
                                                 rsx! {
                                                     div {
                                                         key: "{cat.id}",
-                                                        class: "flex items-start gap-2.5 p-2 rounded-lg hover:bg-hb-cytoplasm cursor-pointer transition-colors text-xs text-hb-nucleus",
+                                                        class: "flex items-start gap-2.5 p-2 rounded-lg hover:bg-kr-cytoplasm cursor-pointer transition-colors text-xs text-kr-nucleus",
                                                         onclick: move |_| {
                                                             let mut list = selected_categories.read().clone();
                                                             if list.contains(&cat_id_clone) {
@@ -828,7 +841,7 @@ pub fn Compare() -> Element {
                                                         },
                                                         input {
                                                             type: "checkbox",
-                                                            class: "mt-0.5 accent-hb-primary",
+                                                            class: "mt-0.5 accent-kr-primary",
                                                             checked: is_selected,
                                                             readonly: true,
                                                         }
@@ -847,9 +860,9 @@ pub fn Compare() -> Element {
                                 // Specific Criteria checkboxes
                                 div {
                                     class: "space-y-2",
-                                    label { class: "text-xs font-bold text-hb-matrix block", "Include Specific Criteria" }
+                                    label { class: "text-xs font-bold text-kr-matrix block", "Include Specific Criteria" }
                                     div {
-                                        class: "grid grid-cols-1 md:grid-cols-2 gap-2 bg-hb-membrane p-4 rounded-xl border border-hb-matrix/10 max-h-40 overflow-y-auto",
+                                        class: "grid grid-cols-1 md:grid-cols-2 gap-2 bg-kr-membrane p-4 rounded-xl border border-kr-matrix/10 max-h-40 overflow-y-auto",
                                         {
                                             let all_existing_criteria = {
                                                 let mut map = HashMap::new();
@@ -874,7 +887,7 @@ pub fn Compare() -> Element {
                                                 rsx! {
                                                     div {
                                                         key: "{crit.id}",
-                                                        class: "flex items-start gap-2.5 p-2 rounded-lg hover:bg-hb-cytoplasm cursor-pointer transition-colors text-xs text-hb-nucleus",
+                                                        class: "flex items-start gap-2.5 p-2 rounded-lg hover:bg-kr-cytoplasm cursor-pointer transition-colors text-xs text-kr-nucleus",
                                                         onclick: move |_| {
                                                             let mut list = selected_criteria.read().clone();
                                                             if list.contains(&crit_id_clone) {
@@ -886,7 +899,7 @@ pub fn Compare() -> Element {
                                                         },
                                                         input {
                                                             type: "checkbox",
-                                                            class: "mt-0.5 accent-hb-primary",
+                                                            class: "mt-0.5 accent-kr-primary",
                                                             checked: is_selected,
                                                             readonly: true,
                                                         }
@@ -904,8 +917,8 @@ pub fn Compare() -> Element {
 
                                 // Create & add a custom criteria inline
                                 div {
-                                    class: "space-y-3 border-t border-hb-matrix/10 pt-4",
-                                    label { class: "text-xs font-bold text-hb-matrix block", "Add Custom Specific Criteria" }
+                                    class: "space-y-3 border-t border-kr-matrix/10 pt-4",
+                                    label { class: "text-xs font-bold text-kr-matrix block", "Add Custom Specific Criteria" }
 
                                     // Custom criteria list added so far
                                     if !custom_criteria.read().is_empty() {
@@ -914,12 +927,12 @@ pub fn Compare() -> Element {
                                             for crit in custom_criteria.read().iter() {
                                                 div {
                                                     key: "{crit.id}",
-                                                    class: "flex justify-between items-center bg-hb-membrane px-3 py-2 rounded-lg text-xs text-hb-nucleus border border-hb-matrix/5",
+                                                    class: "flex justify-between items-center bg-kr-membrane px-3 py-2 rounded-lg text-xs text-kr-nucleus border border-kr-matrix/5",
                                                     div {
                                                         class: "flex items-center gap-2",
                                                         span { "{crit.emoji}" }
                                                         span { class: "font-bold", "{crit.name}" }
-                                                        span { class: "text-hb-matrix text-[10px]", "- {crit.description}" }
+                                                        span { class: "text-kr-matrix text-[10px]", "- {crit.description}" }
                                                     }
                                                     button {
                                                         class: "text-rose-500 hover:text-rose-700 font-bold",
@@ -938,14 +951,14 @@ pub fn Compare() -> Element {
 
                                     // Form fields to add a custom specific criterion
                                     div {
-                                        class: "bg-hb-membrane p-4 rounded-xl border border-hb-matrix/10 space-y-3",
+                                        class: "bg-kr-membrane p-4 rounded-xl border border-kr-matrix/10 space-y-3",
                                         div {
                                             class: "grid grid-cols-4 gap-3",
                                             div {
                                                 class: "col-span-1 space-y-1",
-                                                label { class: "text-[10px] font-bold text-hb-matrix", "Emoji" }
+                                                label { class: "text-[10px] font-bold text-kr-matrix", "Emoji" }
                                                 input {
-                                                    class: "bg-hb-cytoplasm border border-hb-matrix/10 rounded-lg px-2.5 py-1.5 text-center text-sm w-full focus:outline-none focus:border-hb-primary text-hb-nucleus",
+                                                    class: "bg-kr-cytoplasm border border-kr-matrix/10 rounded-lg px-2.5 py-1.5 text-center text-sm w-full focus:outline-none focus:border-kr-primary text-kr-nucleus",
                                                     placeholder: "✨",
                                                     value: "{temp_crit_emoji}",
                                                     oninput: move |e| temp_crit_emoji.set(e.value()),
@@ -953,9 +966,9 @@ pub fn Compare() -> Element {
                                             }
                                             div {
                                                 class: "col-span-3 space-y-1",
-                                                label { class: "text-[10px] font-bold text-hb-matrix", "Criterion Name" }
+                                                label { class: "text-[10px] font-bold text-kr-matrix", "Criterion Name" }
                                                 input {
-                                                    class: "bg-hb-cytoplasm border border-hb-matrix/10 rounded-lg px-3 py-1.5 text-xs w-full focus:outline-none focus:border-hb-primary text-hb-nucleus font-medium",
+                                                    class: "bg-kr-cytoplasm border border-kr-matrix/10 rounded-lg px-3 py-1.5 text-xs w-full focus:outline-none focus:border-kr-primary text-kr-nucleus font-medium",
                                                     placeholder: "e.g., Filtration Efficiency",
                                                     value: "{temp_crit_name}",
                                                     oninput: move |e| temp_crit_name.set(e.value()),
@@ -964,9 +977,9 @@ pub fn Compare() -> Element {
                                         }
                                         div {
                                             class: "space-y-1",
-                                            label { class: "text-[10px] font-bold text-hb-matrix", "Criterion Description" }
+                                            label { class: "text-[10px] font-bold text-kr-matrix", "Criterion Description" }
                                             input {
-                                                class: "bg-hb-cytoplasm border border-hb-matrix/10 rounded-lg px-3 py-1.5 text-xs w-full focus:outline-none focus:border-hb-primary text-hb-nucleus",
+                                                class: "bg-kr-cytoplasm border border-kr-matrix/10 rounded-lg px-3 py-1.5 text-xs w-full focus:outline-none focus:border-kr-primary text-kr-nucleus",
                                                 placeholder: "e.g., HEPA filter capture rate of fine dust particles...",
                                                 value: "{temp_crit_desc}",
                                                 oninput: move |e| temp_crit_desc.set(e.value()),
@@ -974,7 +987,7 @@ pub fn Compare() -> Element {
                                         }
                                         button {
                                             type: "button",
-                                            class: "px-3 py-1.5 bg-hb-nucleus hover:bg-black text-white text-xs font-bold rounded-lg transition-all active:scale-95 shadow-xs w-full",
+                                            class: "px-3 py-1.5 bg-kr-nucleus hover:bg-black text-white text-xs font-bold rounded-lg transition-all active:scale-95 shadow-xs w-full",
                                             onclick: move |_| {
                                                 let name_val = temp_crit_name.read().trim().to_string();
                                                 let desc_val = temp_crit_desc.read().trim().to_string();
@@ -1006,16 +1019,16 @@ pub fn Compare() -> Element {
 
                             // Save button
                             div {
-                                class: "flex justify-end gap-3 border-t border-hb-matrix/10 pt-4",
+                                class: "flex justify-end gap-3 border-t border-kr-matrix/10 pt-4",
                                 button {
-                                    class: "px-5 py-2.5 bg-hb-membrane hover:bg-hb-cytoplasm border border-hb-matrix/20 text-hb-nucleus text-xs font-bold rounded-lg transition-all active:scale-95",
+                                    class: "px-5 py-2.5 bg-kr-membrane hover:bg-kr-cytoplasm border border-kr-matrix/20 text-kr-nucleus text-xs font-bold rounded-lg transition-all active:scale-95",
                                     onclick: move |_| {
                                         creation_mode.set(CreationMode::None);
                                     },
                                     "Cancel"
                                 }
                                 button {
-                                    class: "hb-btn-pill px-6 py-2.5 text-white active:scale-95 text-xs shadow-md shadow-hb-primary/10",
+                                    class: "kr-btn-pill px-6 py-2.5 text-white active:scale-95 text-xs shadow-md shadow-kr-primary/10",
                                     onclick: move |_| {
                                         let name_val = new_name.read().trim().to_string();
                                         if !name_val.is_empty() {
@@ -1093,7 +1106,7 @@ pub fn Compare() -> Element {
             } else {
                 // Tab Selector based on workspace mode
                     div {
-                        class: "flex flex-wrap border-b border-hb-matrix/10 mb-8 gap-1",
+                        class: "flex flex-wrap border-b border-kr-matrix/10 mb-8 gap-1",
                         match workspace_mode() {
                             WorkspaceMode::ProductType => {
                                 rsx! {
@@ -1101,9 +1114,9 @@ pub fn Compare() -> Element {
                                         {
                                             let is_active = selected_prod_type_idx() == idx;
                                             let tab_class = if is_active {
-                                                "border-hb-primary text-hb-primary font-extrabold"
+                                                "border-kr-primary text-kr-primary font-extrabold"
                                             } else {
-                                                "border-transparent text-hb-matrix hover:text-hb-nucleus hover:border-hb-matrix/30"
+                                                "border-transparent text-kr-matrix hover:text-kr-nucleus hover:border-kr-matrix/30"
                                             };
                                             rsx! {
                                                 button {
@@ -1126,9 +1139,9 @@ pub fn Compare() -> Element {
                                         {
                                             let is_active = selected_category_idx() == idx;
                                             let tab_class = if is_active {
-                                                "border-hb-primary text-hb-primary font-extrabold"
+                                                "border-kr-primary text-kr-primary font-extrabold"
                                             } else {
-                                                "border-transparent text-hb-matrix hover:text-hb-nucleus hover:border-hb-matrix/30"
+                                                "border-transparent text-kr-matrix hover:text-kr-nucleus hover:border-kr-matrix/30"
                                             };
                                             rsx! {
                                                 button {
@@ -1158,29 +1171,29 @@ pub fn Compare() -> Element {
 
                             // Selected entity card (Product Type or Category)
                             div {
-                                class: "bg-hb-cytoplasm border border-hb-matrix/10 p-5 hb-squarcle shadow-sm",
+                                class: "bg-kr-cytoplasm border border-kr-matrix/10 p-5 kr-squarcle shadow-sm",
                                 div {
                                     class: "flex justify-between items-start",
-                                    h2 { class: "text-lg font-bold text-hb-nucleus flex items-center gap-2 font-display",
+                                    h2 { class: "text-lg font-bold text-kr-nucleus flex items-center gap-2 font-display",
                                         span { "{active_emoji}" }
                                         span { "{active_name}" }
                                     }
                                     span {
-                                        class: "text-[10px] uppercase font-extrabold px-2 py-0.5 rounded bg-hb-membrane border border-hb-matrix/10 text-hb-primary",
+                                        class: "text-[10px] uppercase font-extrabold px-2 py-0.5 rounded bg-kr-membrane border border-kr-matrix/10 text-kr-primary",
                                         match workspace_mode() {
                                             WorkspaceMode::ProductType => "Product Type",
                                             WorkspaceMode::Category => "Global Category",
                                         }
                                     }
                                 }
-                                p { class: "text-hb-matrix text-xs mt-2.5 leading-relaxed", "{active_desc}" }
+                                p { class: "text-kr-matrix text-xs mt-2.5 leading-relaxed", "{active_desc}" }
                             }
 
                             // Presets Selection
                             if !active_presets.is_empty() {
                                 div {
-                                    class: "bg-hb-cytoplasm border border-hb-matrix/10 p-5 hb-squarcle space-y-3 shadow-sm",
-                                    h3 { class: "text-xs font-bold text-hb-matrix uppercase tracking-widest font-display", "Quick Weight Presets" }
+                                    class: "bg-kr-cytoplasm border border-kr-matrix/10 p-5 kr-squarcle space-y-3 shadow-sm",
+                                    h3 { class: "text-xs font-bold text-kr-matrix uppercase tracking-widest font-display", "Quick Weight Presets" }
                                     div {
                                         class: "flex flex-wrap gap-2",
                                         for preset in &active_presets {
@@ -1189,7 +1202,7 @@ pub fn Compare() -> Element {
                                                 rsx! {
                                                     button {
                                                         key: "{preset.name}",
-                                                        class: "px-4 py-1.5 bg-hb-membrane hover:bg-hb-cytoplasm border border-hb-matrix/15 hover:border-hb-primary/30 rounded-full text-xs font-semibold text-hb-matrix hover:text-hb-nucleus transition-all active:scale-95",
+                                                        class: "px-4 py-1.5 bg-kr-membrane hover:bg-kr-cytoplasm border border-kr-matrix/15 hover:border-kr-primary/30 rounded-full text-xs font-semibold text-kr-matrix hover:text-kr-nucleus transition-all active:scale-95",
                                                         onclick: move |_| {
                                                             weights.set(preset.weights.clone());
                                                         },
@@ -1207,12 +1220,12 @@ pub fn Compare() -> Element {
                                 class: "space-y-3.5",
                                 div {
                                     class: "flex justify-between items-center px-1",
-                                    h3 { class: "text-xs font-bold text-hb-matrix uppercase tracking-widest font-display", "Customize Criteria Weight" }
+                                    h3 { class: "text-xs font-bold text-kr-matrix uppercase tracking-widest font-display", "Customize Criteria Weight" }
                                     button {
-                                        class: "text-[10px] text-hb-primary hover:text-hb-primary/80 font-bold",
+                                        class: "text-[10px] text-kr-primary hover:text-kr-primary/80 font-bold",
                                         onclick: move |_| {
                                             let mut reset_map = HashMap::new();
-                                            for crit in &active_criteria {
+                                            for crit in &active_criteria_for_reset {
                                                 reset_map.insert(crit.id.clone(), 5.0);
                                             }
                                             weights.set(reset_map);
@@ -1254,8 +1267,205 @@ pub fn Compare() -> Element {
 
                         div {
                             class: "flex justify-between items-center px-2",
-                            h3 { class: "text-xs font-bold text-hb-matrix uppercase tracking-widest font-display", "Analytical Ranking" }
-                            span { class: "text-xs text-hb-matrix font-semibold", "{sorted_products.len()} Items Sorted" }
+                            h3 { class: "text-xs font-bold text-kr-matrix uppercase tracking-widest font-display", "Analytical Ranking" }
+                            div {
+                                class: "flex items-center gap-3",
+                                span { class: "text-xs text-kr-matrix font-semibold", "{sorted_products.len()} Items Sorted" }
+                                if workspace_mode() == WorkspaceMode::ProductType {
+                                    button {
+                                        class: "px-3 py-1 bg-kr-primary hover:bg-kr-primary/90 text-white text-[11px] font-bold rounded-lg transition-all active:scale-95 shadow-sm",
+                                        onclick: move |_| {
+                                            show_add_product_form.set(!show_add_product_form());
+                                        },
+                                        if show_add_product_form() { "Cancel" } else { "+ Add Product" }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Product Creation Form
+                        if show_add_product_form() && workspace_mode() == WorkspaceMode::ProductType {
+                            div {
+                                class: "bg-kr-cytoplasm border border-kr-primary/35 p-6 kr-squarcle shadow-lg space-y-4 animate-fade-in-down",
+                                h4 { class: "font-bold text-kr-nucleus text-base font-display flex items-center gap-2",
+                                    span { "✨" }
+                                    span { "Add Product to {active_name}" }
+                                }
+                                
+                                div {
+                                    class: "grid grid-cols-1 md:grid-cols-2 gap-4",
+                                    div {
+                                        class: "space-y-1.5",
+                                        label { class: "text-xs font-bold text-kr-matrix", "Product Name" }
+                                        input {
+                                            class: "bg-kr-membrane border border-kr-matrix/10 rounded-xl px-4 py-2 text-xs w-full focus:outline-none focus:border-kr-primary text-kr-nucleus font-medium",
+                                            placeholder: "e.g., Fairphone 6",
+                                            value: "{new_product_name}",
+                                            oninput: move |e| new_product_name.set(e.value()),
+                                        }
+                                    }
+                                    div {
+                                        class: "grid grid-cols-3 gap-2",
+                                        div {
+                                            class: "col-span-2 space-y-1.5",
+                                            label { class: "text-xs font-bold text-kr-matrix", "Price ($)" }
+                                            input {
+                                                type: "number",
+                                                step: "0.01",
+                                                min: "0.0",
+                                                class: "bg-kr-membrane border border-kr-matrix/10 rounded-xl px-4 py-2 text-xs w-full focus:outline-none focus:border-kr-primary text-kr-nucleus font-medium",
+                                                placeholder: "e.g., 699.00",
+                                                value: "{new_product_price}",
+                                                oninput: move |e| new_product_price.set(e.value()),
+                                            }
+                                        }
+                                        div {
+                                            class: "col-span-1 space-y-1.5",
+                                            label { class: "text-xs font-bold text-kr-matrix", "Qty" }
+                                            input {
+                                                type: "number",
+                                                step: "0.01",
+                                                min: "0.0",
+                                                class: "bg-kr-membrane border border-kr-matrix/10 rounded-xl px-3 py-2 text-xs w-full focus:outline-none focus:border-kr-primary text-kr-nucleus font-medium",
+                                                placeholder: "e.g., 0.25",
+                                                value: "{new_product_quantity}",
+                                                oninput: move |e| new_product_quantity.set(e.value()),
+                                            }
+                                        }
+                                    }
+                                }
+
+                                div {
+                                    class: "grid grid-cols-1 md:grid-cols-2 gap-4",
+                                    div {
+                                        class: "space-y-1.5",
+                                        label { class: "text-xs font-bold text-kr-matrix", "Unit" }
+                                        select {
+                                            class: "bg-kr-membrane border border-kr-matrix/10 rounded-xl px-4 py-2 text-xs w-full focus:outline-none focus:border-kr-primary text-kr-nucleus font-medium",
+                                            value: "{new_product_unit}",
+                                            onchange: move |e| new_product_unit.set(e.value()),
+                                            option { value: "", "None (per piece)" }
+                                            option { value: "kg", "Kilogram (kg)" }
+                                            option { value: "L", "Liter (L)" }
+                                            option { value: "m", "Meter (m)" }
+                                        }
+                                    }
+                                    div {
+                                        class: "space-y-1.5",
+                                        label { class: "text-xs font-bold text-kr-matrix", "Description" }
+                                        input {
+                                            class: "bg-kr-membrane border border-kr-matrix/10 rounded-xl px-4 py-2 text-xs w-full focus:outline-none focus:border-kr-primary text-kr-nucleus font-medium",
+                                            placeholder: "Brief description of the product...",
+                                            value: "{new_product_description}",
+                                            oninput: move |e| new_product_description.set(e.value()),
+                                        }
+                                    }
+                                }
+
+                                // Sliders to configure criteria scores
+                                div {
+                                    class: "space-y-2 border-t border-kr-matrix/10 pt-4",
+                                    label { class: "text-xs font-bold text-kr-matrix block", "Evaluate Criteria Scores (0 - 10)" }
+                                    div {
+                                        class: "grid grid-cols-1 md:grid-cols-2 gap-4 bg-kr-membrane p-4 rounded-xl border border-kr-matrix/10 max-h-60 overflow-y-auto",
+                                        for crit in &active_criteria_for_sliders {
+                                            {
+                                                let crit = crit.clone();
+                                                let score = new_product_scores.read().get(&crit.id).copied().unwrap_or(5.0);
+                                                rsx! {
+                                                    div {
+                                                        key: "{crit.id}",
+                                                        class: "space-y-1",
+                                                        div {
+                                                            class: "flex justify-between items-center",
+                                                            span { class: "text-xs font-semibold text-kr-nucleus flex items-center gap-1.5",
+                                                                span { "{crit.emoji}" }
+                                                                span { "{crit.name}" }
+                                                            }
+                                                            span { class: "text-xs font-bold text-kr-primary tabular-nums", "{score:.1}" }
+                                                        }
+                                                        input {
+                                                            type: "range",
+                                                            min: "0.0",
+                                                            max: "10.0",
+                                                            step: "0.1",
+                                                            class: "w-full accent-kr-primary h-1 bg-kr-cytoplasm rounded-lg appearance-none cursor-pointer",
+                                                            value: "{score}",
+                                                            oninput: move |e| {
+                                                                if let Ok(val) = e.value().parse::<f64>() {
+                                                                    new_product_scores.write().insert(crit.id.clone(), val);
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Actions
+                                div {
+                                    class: "flex justify-end gap-3 border-t border-kr-matrix/10 pt-4",
+                                    button {
+                                        class: "px-4 py-2 bg-kr-membrane hover:bg-kr-cytoplasm border border-kr-matrix/20 text-kr-nucleus text-xs font-bold rounded-lg transition-all active:scale-95",
+                                        onclick: move |_| {
+                                            show_add_product_form.set(false);
+                                        },
+                                        "Cancel"
+                                    }
+                                    button {
+                                        class: "kr-btn-pill px-5 py-2 text-white active:scale-95 text-xs shadow-md shadow-kr-primary/10",
+                                        onclick: move |_| {
+                                            let name_val = new_product_name.read().trim().to_string();
+                                            if !name_val.is_empty() {
+                                                let clean_id = name_val.to_lowercase()
+                                                    .chars()
+                                                    .map(|c| if c == ' ' { '-' } else { c })
+                                                    .filter(|c| c.is_alphanumeric() || *c == '-')
+                                                    .collect::<String>();
+
+                                                let price_val = new_product_price.read().parse::<f64>().unwrap_or(0.0);
+                                                let qty_val = new_product_quantity.read().parse::<f64>().ok();
+                                                let unit_val = {
+                                                    let u = new_product_unit.read();
+                                                    if u.is_empty() { None } else { Some(u.clone()) }
+                                                };
+
+                                                let mut final_scores = HashMap::new();
+                                                for crit in &active_criteria_for_save {
+                                                    let score = new_product_scores.read().get(&crit.id).copied().unwrap_or(5.0);
+                                                    final_scores.insert(crit.id.clone(), score);
+                                                }
+
+                                                let pt = &product_types.read()[selected_prod_type_idx()];
+                                                let new_prod = Product {
+                                                    id: clean_id,
+                                                    name: name_val,
+                                                    description: new_product_description.read().trim().to_string(),
+                                                    price: price_val,
+                                                    quantity: qty_val,
+                                                    unit: unit_val,
+                                                    product_type_id: pt.id.clone(),
+                                                    scores: final_scores,
+                                                };
+
+                                                products.write().push(new_prod);
+
+                                                // Reset form
+                                                new_product_name.set("".to_string());
+                                                new_product_price.set("".to_string());
+                                                new_product_quantity.set("".to_string());
+                                                new_product_unit.set("".to_string());
+                                                new_product_description.set("".to_string());
+                                                new_product_scores.write().clear();
+                                                show_add_product_form.set(false);
+                                            }
+                                        },
+                                        "Save Product"
+                                    }
+                                }
+                            }
                         }
 
                         div {
@@ -1265,7 +1475,7 @@ pub fn Compare() -> Element {
                                     key: "{product.id}",
                                     rank: idx + 1,
                                     product: product.clone(),
-                                    criteria: active_criteria.clone(),
+                                    criteria: active_criteria_for_cards.clone(),
                                     weights: weights()
                                 }
                             }

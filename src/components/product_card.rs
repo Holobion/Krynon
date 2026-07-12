@@ -15,6 +15,18 @@ pub fn ProductCard(
     let overall_score = calculate_score(&product, &weights);
     let rounded_score = (overall_score * 10.0).round() / 10.0;
 
+    let formatted_price = format!("${:.2}", product.price);
+    let unit_price_str = if let (Some(qty), Some(unit)) = (product.quantity, product.unit.as_ref())
+    {
+        if qty > 0.0 && !unit.is_empty() {
+            Some(format!("(${:.2} / {})", product.price / qty, unit))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     let sum_weights: f64 = criteria
         .iter()
         .map(|c| weights.get(&c.id).copied().unwrap_or(5.0))
@@ -38,9 +50,9 @@ pub fn ProductCard(
             "text-orange-700",
         ),
         _ => (
-            "border-hb-matrix/10 hover:border-hb-matrix/20",
-            "bg-hb-membrane text-hb-matrix border border-hb-matrix/10 font-semibold",
-            "text-hb-matrix",
+            "border-kr-matrix/10 hover:border-kr-matrix/20",
+            "bg-kr-membrane text-kr-matrix border border-kr-matrix/10 font-semibold",
+            "text-kr-matrix",
         ),
     };
 
@@ -48,7 +60,7 @@ pub fn ProductCard(
 
     rsx! {
         div {
-            class: "bg-hb-cytoplasm border {card_border} p-5 hb-squarcle transition-all duration-300 hover:scale-[1.005] hover:shadow-md hover:border-hb-primary/30 cursor-pointer relative overflow-hidden group shadow-sm hover:hb-halo",
+            class: "bg-kr-cytoplasm border {card_border} p-5 kr-squarcle transition-all duration-300 hover:scale-[1.005] hover:shadow-md hover:border-kr-primary/30 cursor-pointer relative overflow-hidden group shadow-sm hover:kr-halo",
             onclick: move |_| {
                 is_expanded.set(!is_expanded());
             },
@@ -64,8 +76,21 @@ pub fn ProductCard(
                         "#{rank}"
                     }
                     div {
-                        h3 { class: "font-bold text-hb-nucleus text-lg group-hover:text-hb-primary transition-colors font-display", "{product.name}" }
-                        p { class: "text-hb-matrix text-xs mt-0.5 line-clamp-1", "{product.description}" }
+                        h3 { class: "font-bold text-kr-nucleus text-lg group-hover:text-kr-primary transition-colors font-display", "{product.name}" }
+                        div { class: "flex flex-wrap items-center gap-2 mt-1",
+                            span {
+                                class: "px-2 py-0.5 rounded-md text-xs font-extrabold bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 shrink-0",
+                                "{formatted_price}"
+                            }
+                            if let Some(ref unit_price) = unit_price_str {
+                                span {
+                                    class: "text-[10px] font-bold text-kr-matrix bg-kr-membrane px-1.5 py-0.5 rounded-md border border-kr-matrix/10 shrink-0",
+                                    "{unit_price}"
+                                }
+                            }
+                            span { class: "text-kr-matrix/30 text-xs shrink-0", "|" }
+                            p { class: "text-kr-matrix text-xs line-clamp-1", "{product.description}" }
+                        }
                     }
                 }
 
@@ -73,16 +98,16 @@ pub fn ProductCard(
                 div {
                     class: "flex flex-col items-end",
                     span {
-                        class: "bg-hb-primary text-white font-extrabold text-lg px-3.5 py-1 rounded-xl border border-hb-primary/20 tabular-nums shadow-sm hb-halo",
+                        class: "bg-kr-primary text-white font-extrabold text-lg px-3.5 py-1 rounded-xl border border-kr-primary/20 tabular-nums shadow-sm kr-halo",
                         "{rounded_score}"
                     }
-                    span { class: "text-[10px] text-hb-matrix uppercase tracking-widest mt-1", "Score" }
+                    span { class: "text-[10px] text-kr-matrix uppercase tracking-widest mt-1", "Score" }
                 }
             }
 
             // Small mini progress bars to show weight proportion visually
             div {
-                class: "flex w-full h-1.5 bg-hb-membrane rounded-full mt-4 overflow-hidden border border-hb-matrix/10",
+                class: "flex w-full h-1.5 bg-kr-membrane rounded-full mt-4 overflow-hidden border border-kr-matrix/10",
                 for criterion in &criteria {
                     {
                         let weight = weights.get(&criterion.id).copied().unwrap_or(5.0);
@@ -122,15 +147,33 @@ pub fn ProductCard(
             // Expandable details drawer
             if is_expanded() {
                 div {
-                    class: "mt-5 pt-4 border-t border-hb-matrix/10 space-y-4 animate-fade-in-down",
+                    class: "mt-5 pt-4 border-t border-kr-matrix/10 space-y-4 animate-fade-in-down",
                     onclick: move |e| {
                         // Prevent clicking detail drawer from closing card
                         e.stop_propagation();
                     },
 
-                    p { class: "text-hb-nucleus/90 text-sm leading-relaxed", "{product.description}" }
+                    div {
+                        class: "flex items-center gap-3 bg-kr-membrane p-3 kr-squarcle-sm border border-kr-matrix/10 text-xs font-medium text-kr-nucleus",
+                        span { class: "text-kr-matrix", "Market Pricing" }
+                        span { class: "font-extrabold text-emerald-600 text-sm", "{formatted_price}" }
+                        if let (Some(qty), Some(unit)) = (product.quantity, product.unit.as_ref()) {
+                            if qty > 0.0 && !unit.is_empty() {
+                                {
+                                    let unit_price = product.price / qty;
+                                    rsx! {
+                                        span { class: "text-kr-matrix",
+                                            "({qty} {unit} @ ${unit_price:.2} / {unit})"
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
 
-                    h4 { class: "text-xs font-bold text-hb-matrix uppercase tracking-widest mt-4 font-display", "Detailed Criteria Breakdown" }
+                    p { class: "text-kr-nucleus/90 text-sm leading-relaxed", "{product.description}" }
+
+                    h4 { class: "text-xs font-bold text-kr-matrix uppercase tracking-widest mt-4 font-display", "Detailed Criteria Breakdown" }
 
                     div {
                         class: "grid grid-cols-1 md:grid-cols-2 gap-4 mt-2",
@@ -161,20 +204,20 @@ pub fn ProductCard(
                                 rsx! {
                                     div {
                                         key: "{criterion.id}",
-                                        class: "bg-hb-membrane border border-hb-matrix/10 p-3 hb-squarcle-sm flex flex-col justify-between shadow-xs",
+                                        class: "bg-kr-membrane border border-kr-matrix/10 p-3 kr-squarcle-sm flex flex-col justify-between shadow-xs",
                                         div {
                                             class: "flex justify-between items-center",
                                             div {
                                                 class: "flex items-center gap-1.5",
                                                 span { class: "text-sm", "{criterion.emoji}" }
-                                                span { class: "text-xs font-semibold text-hb-nucleus", "{criterion.name}" }
+                                                span { class: "text-xs font-semibold text-kr-nucleus", "{criterion.name}" }
                                             }
-                                            span { class: "text-xs font-bold text-hb-nucleus tabular-nums", "{score} / 10" }
+                                            span { class: "text-xs font-bold text-kr-nucleus tabular-nums", "{score} / 10" }
                                         }
 
                                         // Score Bar
                                         div {
-                                            class: "w-full h-1.5 bg-hb-cytoplasm border border-hb-matrix/10 rounded-full mt-2 overflow-hidden",
+                                            class: "w-full h-1.5 bg-kr-cytoplasm border border-kr-matrix/10 rounded-full mt-2 overflow-hidden",
                                             div {
                                                 class: "h-full {color}",
                                                 style: "width: {score_percentage}%"
@@ -183,9 +226,9 @@ pub fn ProductCard(
 
                                         // Weight and Contribution Info
                                         div {
-                                            class: "flex justify-between items-center text-[10px] text-hb-matrix mt-2 font-medium",
+                                            class: "flex justify-between items-center text-[10px] text-kr-matrix mt-2 font-medium",
                                             span { "Weight factor: x{weight}" }
-                                            span { class: "text-hb-primary font-bold", "Adds +{contrib_rounded} to score" }
+                                            span { class: "text-kr-primary font-bold", "Adds +{contrib_rounded} to score" }
                                         }
                                     }
                                 }
@@ -199,7 +242,7 @@ pub fn ProductCard(
             div {
                 class: "flex justify-center mt-3",
                 svg {
-                    class: "w-4 h-4 text-hb-matrix group-hover:text-hb-primary transition-all duration-300 {arrow_class}",
+                    class: "w-4 h-4 text-kr-matrix group-hover:text-kr-primary transition-all duration-300 {arrow_class}",
                     fill: "none",
                     stroke: "currentColor",
                     view_box: "0 0 24 24",

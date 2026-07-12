@@ -37,6 +37,9 @@ pub struct Product {
     pub id: String,
     pub name: String,
     pub description: String,
+    pub price: f64,
+    pub quantity: Option<f64>,
+    pub unit: Option<String>,
     pub product_type_id: String,
     pub scores: HashMap<String, f64>, // This will be populated by fetching from product_scores
 }
@@ -202,7 +205,7 @@ pub async fn fetch_weight_profiles_for_product_type(
 #[cfg(feature = "server")]
 pub async fn fetch_all_products(pool: &PgPool) -> Result<Vec<Product>, sqlx::Error> {
     let products_rows =
-        sqlx::query("SELECT id, name, description, product_type_id FROM products ORDER BY name")
+        sqlx::query("SELECT id, name, description, price, quantity, unit, product_type_id FROM products ORDER BY name")
             .fetch_all(pool)
             .await?;
 
@@ -214,6 +217,9 @@ pub async fn fetch_all_products(pool: &PgPool) -> Result<Vec<Product>, sqlx::Err
             id: product_id,
             name: row.get("name"),
             description: row.get("description"),
+            price: row.get("price"),
+            quantity: row.get("quantity"),
+            unit: row.get("unit"),
             product_type_id: row.get("product_type_id"),
             scores,
         });

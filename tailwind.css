@@ -1,81 +1,135 @@
 @import "tailwindcss";
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;700;900&family=JetBrains+Mono:wght@400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;700&family=Cormorant+Garamond:ital,wght@0,400;0,700;1,400;1,700&family=JetBrains+Mono:wght@400;700&display=swap');
 
 @theme {
-  --hb-bg-membrane: #F8FAFC;
-  --hb-bg-cytoplasm: #FFFFFF;
-  --hb-text-nucleus: #0F172A;
-  --hb-text-matrix: #64748B;
-  --hb-color-primary: #10B981;
-  --hb-glow-primary: rgba(16, 185, 129, 0.25);
+  /* Palette: Muted Earth Pastel scheme */
+  --kr-bg-membrane: #F2F0E9;      /* Off-white Paper */
+  --kr-bg-cytoplasm: #F2F0E9;     /* Off-white Paper */
+  --kr-text-nucleus: #374151;     /* Deep Slate Gray / Ink */
+  --kr-text-matrix: #5A6578;      /* Soft Slate Gray */
+  --kr-color-primary: #374151;    /* Primary Ink */
+  --kr-glow-primary: rgba(55, 65, 81, 0.1);
+
+  /* Accents */
+  --color-kr-sage: #B4C3B2;       /* Sage */
+  --color-kr-clay: #D9C5B2;       /* Clay */
+  --color-kr-slate: #94A3B8;      /* Slate */
 
   /* Mapping to Tailwind Color Classes */
-  --color-hb-membrane: var(--hb-bg-membrane);
-  --color-hb-cytoplasm: var(--hb-bg-cytoplasm);
-  --color-hb-nucleus: var(--hb-text-nucleus);
-  --color-hb-matrix: var(--hb-text-matrix);
-  --color-hb-primary: var(--hb-color-primary);
-  --color-hb-glow: var(--hb-glow-primary);
+  --color-kr-membrane: var(--kr-bg-membrane);
+  --color-kr-cytoplasm: var(--kr-bg-cytoplasm);
+  --color-kr-nucleus: var(--kr-text-nucleus);
+  --color-kr-matrix: var(--kr-text-matrix);
+  --color-kr-primary: var(--kr-color-primary);
+  --color-kr-glow: var(--kr-glow-primary);
 
   /* Fonts */
-  --font-display: "Outfit", sans-serif;
-  --font-sans: "Inter", sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-sans: "Space Grotesk", sans-serif;
+  --font-serif: "Cormorant Garamond", serif;
   --font-mono: "JetBrains Mono", monospace;
 }
 
 /* Base styling overrides */
 body {
   font-family: var(--font-sans);
-  background-color: var(--hb-bg-membrane);
-  color: var(--hb-text-nucleus);
+  background-color: var(--kr-bg-membrane);
+  color: var(--kr-text-nucleus);
+  margin: 0;
+  padding: 0;
+}
+
+/* Natural Paper Grain Texture Overlay */
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  opacity: 0.04;
+  pointer-events: none;
+  z-index: 9999;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
 }
 
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-display);
+  font-weight: 700;
+  text-transform: uppercase;
 }
 
-/* Custom utility component classes for Symbiosis Design System */
-.hb-squarcle {
-  border-radius: 24px;
+/* Custom utility component classes for Swiss Grid / Bento System */
+.kr-squarcle {
+  border-radius: 0px !important;
+  border: 1.5px solid var(--kr-text-nucleus) !important;
 }
 
-.hb-squarcle-sm {
-  border-radius: 16px;
+.kr-squarcle-sm {
+  border-radius: 0px !important;
+  border: 1.5px solid var(--kr-text-nucleus) !important;
 }
 
-.hb-btn-pill {
-  border-radius: 9999px;
-  background-color: var(--hb-color-primary);
-  color: #ffffff;
-  font-weight: 600;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+.kr-btn-pill {
+  border-radius: 0px !important;
+  background-color: transparent !important;
+  color: var(--kr-text-nucleus) !important;
+  border: 1.5px solid var(--kr-text-nucleus) !important;
+  font-weight: 700;
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.75rem 1.5rem;
+  transition: all 0.15s ease-in-out;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  cursor: pointer;
 }
 
-.hb-btn-pill:hover {
-  box-shadow: 0 10px 25px -5px var(--hb-glow-primary);
-  transform: translateY(-1px);
-  filter: brightness(1.05);
+.kr-btn-pill:hover {
+  background-color: var(--kr-text-nucleus) !important;
+  color: var(--kr-bg-membrane) !important;
+  box-shadow: none !important;
+  transform: none !important;
+  filter: none !important;
 }
 
-.hb-btn-pill:active {
-  transform: translateY(0px);
-  filter: brightness(0.95);
+.kr-btn-pill:active {
+  transform: translateY(1px) !important;
 }
 
-.hb-glass {
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+.kr-glass {
+  background: var(--kr-bg-membrane) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-bottom: 1.5px solid var(--kr-text-nucleus) !important;
 }
 
-.hb-halo {
-  box-shadow: 0 10px 25px -5px var(--hb-glow-primary);
+.kr-halo {
+  box-shadow: none !important;
 }
 
-.hb-border-light {
-  border: 1px solid rgba(100, 116, 139, 0.12);
+.kr-border-light {
+  border: 1.5px solid var(--kr-text-nucleus) !important;
+  border-radius: 0px !important;
+}
+
+/* Additional layout helper classes */
+.kr-grid-box {
+  border: 1.5px solid var(--kr-text-nucleus);
+  background-color: var(--kr-bg-membrane);
+  padding: 1.5rem;
+  position: relative;
+}
+
+.kr-header-bar {
+  border-bottom: 1.5px solid var(--kr-text-nucleus);
+  padding: 0.5rem 1rem;
+  font-family: var(--font-display);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
 }

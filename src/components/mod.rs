@@ -1,6 +1,7 @@
 //! The components module contains all shared components for our app.
 
 mod hero;
+#[allow(unused_imports)]
 pub use hero::Hero;
 
 mod weight_slider;

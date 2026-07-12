@@ -14,21 +14,21 @@ pub fn Hero() -> Element {
                     class: "md:col-span-7 flex flex-col items-start text-left space-y-6",
 
                     div {
-                        class: "inline-flex items-center gap-2 px-3 py-1 rounded-full bg-hb-primary/10 border border-hb-primary/20 text-hb-primary text-xs font-semibold uppercase tracking-wider",
+                        class: "inline-flex items-center gap-2 px-3 py-1 rounded-full bg-kr-primary/10 border border-kr-primary/20 text-kr-primary text-xs font-semibold uppercase tracking-wider",
                         span { "🎯 Objective & Data-Driven" }
                     }
 
                     h1 {
-                        class: "font-black tracking-tight text-5xl md:text-6xl text-hb-nucleus leading-[1.1] font-display",
+                        class: "font-black tracking-tight text-5xl md:text-6xl text-kr-nucleus leading-[1.1] font-display",
                         "Unveil the perfect choice with "
                         span {
-                            class: "bg-clip-text text-transparent bg-gradient-to-r from-hb-primary via-emerald-400 to-teal-500",
+                            class: "bg-clip-text text-transparent bg-gradient-to-r from-kr-primary via-emerald-400 to-teal-500",
                             "Krynon"
                         }
                     }
 
                     p {
-                        class: "text-hb-matrix text-lg leading-relaxed max-w-xl",
+                        class: "text-kr-matrix text-lg leading-relaxed max-w-xl",
                         "Say goodbye to arbitrary 5-star reviews. Krynon is an analytical classification engine that sorts products based on details that actually matter to you. Customize criteria weights to find what fits your life."
                     }
 
@@ -36,12 +36,12 @@ pub fn Hero() -> Element {
                         class: "flex flex-col sm:flex-row gap-4 w-full sm:w-auto pt-2",
                         Link {
                             to: Route::Compare {},
-                            class: "hb-btn-pill px-8 py-3.5 text-center shadow-lg active:scale-[0.98]",
+                            class: "kr-btn-pill px-8 py-3.5 text-center shadow-lg active:scale-[0.98]",
                             "Open Engine Workspace"
                         }
                         Link {
                             to: Route::About {},
-                            class: "inline-flex items-center justify-center px-8 py-3.5 bg-hb-cytoplasm hover:bg-hb-membrane border border-hb-matrix/20 text-hb-nucleus font-semibold rounded-full transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] text-center shadow-sm",
+                            class: "inline-flex items-center justify-center px-8 py-3.5 bg-kr-cytoplasm hover:bg-kr-membrane border border-kr-matrix/20 text-kr-nucleus font-semibold rounded-full transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] text-center shadow-sm",
                             "Read Our Philosophy"
                         }
                     }
@@ -51,7 +51,7 @@ pub fn Hero() -> Element {
                 div {
                     class: "md:col-span-5 flex justify-center relative w-full py-8 md:py-0",
                     // Glowing background blobs
-                    div { class: "absolute w-72 h-72 bg-hb-primary/15 rounded-full blur-3xl -z-10" }
+                    div { class: "absolute w-72 h-72 bg-kr-primary/15 rounded-full blur-3xl -z-10" }
                     div { class: "absolute w-48 h-48 -bottom-8 -left-8 bg-teal-400/10 rounded-full blur-3xl -z-10" }
 
                     // Main Container for overlapping cards

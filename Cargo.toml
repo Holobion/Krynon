@@ -1,6 +1,6 @@
 [package]
 name = "krynon"
-version = "0.1.1"
+version = "0.1.4"
 authors = ["Vivelis"]
 edition = "2021"
 repository = "https://github.com/Holobion/Krynon"

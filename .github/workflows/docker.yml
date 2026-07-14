@@ -11,13 +11,20 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
+permissions:
+  contents: read
+  packages: write
+  id-token: write  # needed for attestation / OIDC token
+
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    # Avoid building/publishing on pull requests from forks since secrets are unavailable.
+    # Skip push on pull requests from forks (GITHUB_TOKEN has no write access)
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     permissions:
       contents: read
       packages: write
+      id-token: write
 
     steps:
       - name: Checkout repository

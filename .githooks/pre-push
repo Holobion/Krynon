@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
-# Pre-push hook: when pushing to main, if Cargo.toml was modified in the
-# pushed commits, automatically bump the patch version (e.g. 0.1.0 -> 0.1.1)
-# and append a "chore: bump version to X.Y.Z" commit to the push.
+# Pre-push hook: when pushing to main, automatically bump the patch version
+# (e.g. 0.1.0 -> 0.1.1) UNLESS Cargo.toml was already manually modified in
+# the pushed commits. The bump is squashed into the tip commit via
+# `git commit --amend` — no extra commit is created in the history.
+#
+# If the developer already changed Cargo.toml (e.g. a manual version bump),
+# the hook skips entirely.
 #
 # Install once per clone:
 #   git config core.hooksPath .githooks
@@ -30,10 +34,14 @@ while read -r local_ref local_sha remote_ref remote_sha; do
         range="${remote_sha}..${local_sha}"
     fi
 
-    # Was Cargo.toml modified in the pushed commits?
-    if ! git diff --name-only "$range" -- Cargo.toml | grep -q '^Cargo\.toml$'; then
+    # If Cargo.toml was manually modified in the pushed commits, the developer
+    # already handled versioning — skip the auto-bump entirely.
+    if git diff --name-only "$range" -- Cargo.toml | grep -q '^Cargo\.toml$'; then
+        echo "info: Cargo.toml was modified in the pushed commits — skipping auto version bump."
         continue
     fi
+
+    # Cargo.toml untouched: auto-bump the patch version.
 
     # Read the current version (e.g. "0.1.0")
     current=$(grep -m1 '^version =' Cargo.toml | sed -E 's/.*"([^"]+)".*/\1/')
@@ -50,7 +58,6 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     major="${BASH_REMATCH[1]}"
     minor="${BASH_REMATCH[2]}"
     patch="${BASH_REMATCH[3]}"
-    # patch / pre-release intentionally unused for the bump logic
 
     new_patch=$((10#$patch + 1))
     new_version="${major}.${minor}.${new_patch}"
@@ -79,13 +86,14 @@ while read -r local_ref local_sha remote_ref remote_sha; do
         continue
     fi
 
-    echo "Bumping version: ${current} -> ${new_version}"
+    echo "Bumping version: ${current} -> ${new_version} (amending tip commit)"
 
     git add Cargo.toml Cargo.lock
-    # --no-verify so any pre-commit hook doesn't run (and we don't recurse)
-    git commit --no-verify -m "chore(release): bump version to ${new_version}"
+    # Amend the tip commit to include the version bump — no extra commit in history.
+    # --no-verify prevents the hook from recursing on the amend.
+    git commit --amend --no-edit --no-verify
 done
 
 # Always allow the push to proceed; git will use the updated ref state
-# (which now includes the new commit) when it actually pushes.
+# (which now includes the amended commit) when it actually pushes.
 exit 0
